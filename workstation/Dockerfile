@@ -17,7 +17,7 @@ RUN apt-get update && \
       wget git nano python3 python3-pip python3-websockify \
       ca-certificates supervisor sudo \
       net-tools procps pulseaudio-utils \
-      git build-essential cmake qtbase5-dev \
+      git build-essential cmake qtbase5-dev iputils-ping \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 
@@ -89,7 +89,22 @@ Categories=Development;\n" \
 
 COPY places.sqlite /home/engineer/.mozilla/firefox/ztc0wi0n.default-release/places.sqlite
 RUN chown engineer /home/engineer/.mozilla/firefox/ztc0wi0n.default-release/places.sqlite
-RUN chown -R engineer:engineer /home/engineer 
+RUN chown -R engineer:engineer /home/engineer
+
+# Install Wazuh agent
+RUN printf '#!/bin/bash\necho "[fake-systemctl] $@"\nexit 0\n' \
+    > /usr/local/bin/systemctl && chmod +x /usr/local/bin/systemctl
+RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg \
+    && curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH \
+       | gpg --no-default-keyring \
+         --keyring gnupg-ring:/usr/share/keyrings/wazuh.gpg --import \
+    && chmod 644 /usr/share/keyrings/wazuh.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] \
+       https://packages.wazuh.com/4.x/apt/ stable main" \
+       > /etc/apt/sources.list.d/wazuh.list \
+    && apt-get update \
+    && WAZUH_MANAGER=192.168.90.20 WAZUH_AGENT_NAME=EWS apt-get install -y wazuh-agent \
+    && rm -rf /var/lib/apt/lists/*
 
 
 COPY index.html /opt/noVNC/index.html

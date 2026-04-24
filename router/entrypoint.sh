@@ -9,5 +9,7 @@ iptables -P FORWARD ACCEPT
 ip -c addr
 ip route show
 
+/var/ossec/bin/wazuh-control start || true
+
 # Keep container running and provide a shell via exec
 exec "$@"

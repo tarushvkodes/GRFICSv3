@@ -48,6 +48,10 @@ COPY ids.html /opt/fwui/templates/ids.html
 COPY base.html /opt/fwui/templates/base.html
 COPY router.conf /etc/supervisor/conf.d/router.conf
 COPY suricata.yaml /etc/suricata/suricata.yaml
+
+# Add DigitalBond Quickdraw ICS/SCADA detection rules
+RUN curl -fsSL https://raw.githubusercontent.com/digitalbond/Quickdraw-Snort/refs/heads/master/all-quickdraw.rules \
+    -o /etc/suricata/rules/quickdraw.rules
 COPY ulogd.conf /etc/ulogd.conf
 
 

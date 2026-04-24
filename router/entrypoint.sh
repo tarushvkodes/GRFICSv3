@@ -9,7 +9,11 @@ iptables -P FORWARD ACCEPT
 ip -c addr
 ip route show
 
-/var/ossec/bin/wazuh-control start || true
+if getent hosts wazuh >/dev/null 2>&1; then
+    /var/ossec/bin/wazuh-control start || true
+else
+    echo "[router] Wazuh not in DNS, skipping agent start"
+fi
 
 # Keep container running and provide a shell via exec
 exec "$@"

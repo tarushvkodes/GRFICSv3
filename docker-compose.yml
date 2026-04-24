@@ -137,6 +137,7 @@ services:
         ipv4_address: 192.168.90.250
 
   wazuh:
+    profiles: [siem]
     image: fortiphyd/grfics-wazuh
     container_name: wazuh
     hostname: wazuh

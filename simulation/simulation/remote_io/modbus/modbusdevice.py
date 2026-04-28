@@ -55,7 +55,7 @@ async def writeData(name, writer, context, slave_id):
     request_str = json.dumps(writeDict) + "\n"
     await write_with_timeout(writer, request_str.encode(), 1)
 
-async def run_device(name, ip, handler):
+async def run_device(name, ip, handler, interval=0.2):
     # Initialize datastore
     store = ModbusSlaveContext(
         di=ModbusSequentialDataBlock(0, list(range(1, 101))),
@@ -89,7 +89,7 @@ async def run_device(name, ip, handler):
                     reader, writer = await asyncio.open_connection(HOST, PORT)
                     print(f"[{name}] Connected.")
                     # Start the loop once we have a live socket
-                    asyncio.create_task(handler(context, reader, writer, 0.1))
+                    asyncio.create_task(handler(context, reader, writer, interval))
 
                 # Sleep while the handler runs; if it fails, we’ll detect that
                 await asyncio.sleep(1)

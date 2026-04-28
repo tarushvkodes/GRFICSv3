@@ -15,6 +15,7 @@ async def handletank(context, reader, writer, interval):
             context[slave_id].getValues(0x03, 0, 2)
         except:
             print("read error")
+        await asyncio.sleep(interval)
 
 if __name__ == "__main__":
     asyncio.run(modbusdevice.run_device("Reactor", "192.168.95.14", handletank))

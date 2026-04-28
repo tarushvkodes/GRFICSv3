@@ -7,6 +7,7 @@ IF=$(ip -o -4 addr show | awk '$4 ~ /^192\.168\.95\./ {print $2}' | head -n1)
 
 echo "[entrypoint] Adding IP aliases to $IF manually..."
 
+ip addr add 192.168.95.10/24 dev "$IF"
 ip addr add 192.168.95.11/24 dev "$IF"
 ip addr add 192.168.95.12/24 dev "$IF"
 ip addr add 192.168.95.13/24 dev "$IF"

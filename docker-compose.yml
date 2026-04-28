@@ -136,6 +136,28 @@ services:
       c-dmz-net:
         ipv4_address: 192.168.90.250
 
+  wazuh:
+    profiles: [siem]
+    image: fortiphyd/grfics-wazuh
+    container_name: wazuh
+    hostname: wazuh
+    build: ./wazuh
+    restart: unless-stopped
+    ports:
+      - "1514:1514"     # Wazuh agent enrollment
+      - "1515:1515"     # Wazuh agent communication
+      - "55000:55000"   # Wazuh REST API
+      - "5601:5601"     # Dashboard HTTP
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - wazuh_manager_data:/var/ossec
+      - wazuh_indexer_data:/var/lib/wazuh-indexer
+    networks:
+      a-grfics-admin:
+      c-dmz-net:
+        ipv4_address: 192.168.90.20
+
 networks:
   b-ics-net:
     driver: macvlan
@@ -166,3 +188,7 @@ volumes:
     name: plc_volume
   router_config:
     name: router_config
+  wazuh_manager_data:
+    name: wazuh_manager_data
+  wazuh_indexer_data:
+    name: wazuh_indexer_data

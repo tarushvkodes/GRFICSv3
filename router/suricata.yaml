@@ -83,6 +83,14 @@ outputs:
       append: yes
       #filetype: regular # 'regular', 'unix_stream' or 'unix_dgram'
 
+  # Alerts-only EVE log for Wazuh agent
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: alerts.json
+      types:
+        - alert
+
   # Extensible Event Format (nicknamed EVE) event log in JSON format
   - eve-log:
       enabled: yes

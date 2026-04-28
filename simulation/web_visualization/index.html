@@ -316,17 +316,20 @@
     "localhost": {
       attacker: "http://localhost:6088/",
       defender: "http://localhost:6080/",
-      caldera:  "http://localhost:8888/"
+      caldera:  "http://localhost:8888/",
+      wazuh:    "http://localhost:5601/"
     },
     "127.0.0.1": {
       attacker: "http://127.0.0.1:6088/",
       defender: "http://127.0.0.1:6080/",
-      caldera:  "http://127.0.0.1:8888/"
+      caldera:  "http://127.0.0.1:8888/",
+      wazuh:    "http://127.0.0.1:5601/"
     },
     "192.168.95.45": {
       attacker: "http://192.168.90.6:6080/",
       defender: "http://192.168.95.5:6080/",
-      caldera:  "http://192.168.90.250:8888/"
+      caldera:  "http://192.168.90.250:8888/",
+      wazuh:    "http://192.168.90.20:5601/"
     }
   };
 
@@ -367,6 +370,7 @@
     attacker: { current: null, okStreak: 0, failStreak: 0 },
     defender: { current: null, okStreak: 0, failStreak: 0 },
     caldera:  { current: null, okStreak: 0, failStreak: 0 },
+    wazuh:    { current: null, okStreak: 0, failStreak: 0 },
   };
 
   function setToolStatus(toolName, ok, detailText) {
@@ -441,15 +445,17 @@
   }
 
   async function pollOnce() {
-    const [attOk, defOk, calOk] = await Promise.all([
+    const [attOk, defOk, calOk, wazOk] = await Promise.all([
       checkTool("attacker"),
       checkTool("defender"),
       checkTool("caldera"),
+      checkTool("wazuh"),
     ]);
 
     applyStabilizedResult("attacker", attOk);
     applyStabilizedResult("defender", defOk);
     applyStabilizedResult("caldera",  calOk);
+    applyStabilizedResult("wazuh",    wazOk);
 
     const next = anyUnstable() ? POLL_MS_UNSTABLE : POLL_MS_STABLE;
     setTimeout(pollOnce, next);
@@ -500,6 +506,7 @@ const SIM_POLL_MS = 3000;
     // Tool indicators start calm
     setToolStatus("attacker", null, "Checking…");
     setToolStatus("defender", null, "Checking…");
+    setToolStatus("wazuh",    null, "Checking…");
     pollOnce();
 
     refreshSimulationStatus();
@@ -578,6 +585,19 @@ const SIM_POLL_MS = 3000;
           </div>
         </button>
 
+        <button class="btn" onclick="openTool('wazuh')">
+          <div class="icon">🛡️</div>
+          <div class="meta">
+            <div class="label">Wazuh SIEM</div>
+            <div class="hint">
+              <span class="tool-status">
+                <span id="wazuhDot" class="tool-dot"></span>
+                <span id="wazuhText" class="tool-status-text">Checking…</span>
+              </span>
+            </div>
+          </div>
+        </button>
+
         <div class="section-title">Simulation</div>
 
         <button class="btn" onclick="unityInstance && unityInstance.SetFullscreen(1)">
@@ -600,6 +620,7 @@ const SIM_POLL_MS = 3000;
           <div class="actions">
             <button class="small-btn" onclick="openTool('attacker')">Attacker</button>
             <button class="small-btn" onclick="openTool('defender')">Defender</button>
+            <button class="small-btn" onclick="openTool('wazuh')">Wazuh</button>
             <button class="small-btn" onclick="unityInstance && unityInstance.SetFullscreen(1)">Fullscreen</button>
           </div>
         </div>

@@ -31,15 +31,14 @@ PROC_EXISTS=$(mariadb -uscada -pscada scadalts -N -B -e \
    WHERE ROUTINE_SCHEMA='scadalts' AND ROUTINE_TYPE='PROCEDURE'
      AND ROUTINE_NAME='prc_alarms_notify';" 2>/dev/null || echo 0)
 
-echo "[*] Ensuring admin user exists..."
+echo "[*] Ensuring admin user is set up right"
 mariadb -uscada -pscada scadalts <<-EOSQL
   INSERT INTO users
-    (id, username, password, email, phone, disabled, admin, receiveAlarmEmails, receiveOwnAuditEvents)
+    (id, username, password, email, phone, disabled, admin, receiveAlarmEmails, receiveOwnAuditEvents, homeURL)
   SELECT
-    4, 'admin', '0DPiKuNIrrVmD8IUCuw1hQxNqZc=', 'admin@example.com', '', 'N', 'Y', 0, 0
+    4, 'admin', '0DPiKuNIrrVmD8IUCuw1hQxNqZc=', 'admin@example.com', '', 'N', 'Y', 0, 0, '/views.shtm#'
   WHERE NOT EXISTS (SELECT 1 FROM users WHERE username='admin');
 EOSQL
-
 # Seed project
 VIEW_COUNT=$(mariadb -uscada -pscada scadalts -N -B -e "SELECT COUNT(*) FROM mangoViews;" 2>/dev/null || echo 0)
 if [ "$VIEW_COUNT" -eq 0 ] && [ -f /seed_project_data.sql ]; then

@@ -53,6 +53,7 @@ jobs:
             ["scadalts"]="scadalts/"
             ["attacker"]="attacker/"
             ["caldera"]="caldera/"
+            ["wazuh"]="wazuh/"
           )
 
           # rebuild everything on release
@@ -113,10 +114,10 @@ jobs:
               --provenance=true \
               --sbom=true \
               "./${SERVICE}"
-            echo "🧹 Cleaning local build cache to free space..."
-            docker builder prune -af || true
-            docker system prune -af || true
           done
+          echo "🧹 Cleaning local build cache to free space..."
+          docker builder prune -af || true
+          docker system prune -af || true
 
   # ================================================================
   # Build ARM64 images
@@ -144,7 +145,7 @@ jobs:
               echo "⚠️ Skipping ${SERVICE}: directory does not exist"
               continue
             fi
-            IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/grfics-${SERVICE}"
+            IMAGE="${DOCKERHUB_NAMESPACE}/grfics-${SERVICE}"
             echo "🚀 Building ${IMAGE}:${DOCKER_TAG} (arm64)"
             docker buildx build \
               --platform linux/arm64 \
@@ -155,10 +156,10 @@ jobs:
               --provenance=true \
               --sbom=true \
               "./${SERVICE}"
-            echo "🧹 Cleaning local build cache to free space..."
-            docker builder prune -af || true
-            docker system prune -af || true
           done
+          echo "🧹 Cleaning local build cache to free space..."
+          docker builder prune -af || true
+          docker system prune -af || true
 
   # ================================================================
   # Combine manifests once both architectures exist

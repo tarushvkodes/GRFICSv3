@@ -36,7 +36,7 @@ this is for you.
 * **End-to-end OT / ICS security lab** — PLCs, HMIs, engineering workstations, routers, and attacker tools
 * **3D process visualization** — watch tank levels and valves respond in real time
 * **Virtual Walkthroughs** — explore the warehouse in first person, observing physical layouts and security lapses 
-* **Built-in attack & defense tools** — Kali Linux, MITRE Caldera, and a custom firewall and Suricata IDS interface
+* **Built-in attack & defense tools** — Kali Linux, MITRE Caldera, a custom firewall and Suricata IDS interface, and an optional Wazuh SIEM
 * **Modular, containerized design** — launch everything with a single `docker compose up`
 * **Realistic networking** — segmented process and enterprise zones with controllable traffic flow
 
@@ -183,6 +183,23 @@ you should see the 3D chemical plant simulation come to life.
   docker compose start
   ```
 
+### Optional: Wazuh SIEM
+
+Wazuh is disabled by default (it adds ~3–4 GB and significant startup time). To include it:
+
+```bash
+docker compose --profile siem up -d
+```
+
+To stop it later, make sure to include the profile in the down command:
+
+```bash
+docker compose --profile siem down
+```
+
+Once running, the Wazuh dashboard is available at [http://localhost:5601](http://localhost:5601) (`admin` / `admin`).
+Agents installed on the router and ScadaLTS containers will automatically connect and begin forwarding logs.
+
 ---
 
 ## Core Containers & Access Points
@@ -196,6 +213,7 @@ you should see the 3D chemical plant simulation come to life.
 | **PLC (OpenPLC)**           | [http://localhost:8080](http://localhost:8080) or `192.168.95.2:8080`   | `openplc : openplc`   | Programmable logic controller             |
 | **HMI**                     | [http://localhost:6081](http://localhost:6081) or `192.168.90.107:8080` | `admin : admin`       | Operator interface                        |
 | **Router / Firewall UI**    | `192.168.90.200:5000` or `192.168.95.200:5000`                          | `admin : password`    | View or modify firewall rules             |
+| **Wazuh SIEM** *(optional)* | [http://localhost:5601](http://localhost:5601)                           | `admin : admin`       | SIEM dashboard — security events, alerts  |
 
 
 ---

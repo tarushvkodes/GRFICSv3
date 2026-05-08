@@ -5,6 +5,40 @@
 >
 > Use it to explore **ICS / OT security**, practice **incident response**, or develop and test **defensive and offensive tools** in a safe, hands-on environment.
 
+## Mac + Multi-Browser Lab Guide
+
+This fork adds a simple visual walkthrough for running GRFICSv3 on macOS with Homebrew, Docker CLI, Docker Compose, and Colima. It also documents how to use the Mac as a local lab server so separate browsers or separate computers can open the simulation, Kali attacker machine, Caldera, Wazuh defender dashboard, HMI, PLC, and engineering workstation at the same time.
+
+Start here:
+
+- [Visual step-by-step guide](GRFICSv3_VISUAL_STEP_BY_STEP_GUIDE.md)
+- [Remote browser access notes](GRFICSv3_REMOTE_ACCESS.md)
+- [Installation writeup](GRFICSv3_INSTALL_WRITEUP.md)
+
+### Mac as the Lab Server
+
+When GRFICSv3 runs on your Mac, each service is published as a browser-accessible port. On the Mac itself, use `localhost`. On another computer on the same Wi-Fi/LAN, use the Mac's IP address instead.
+
+Example layout:
+
+| View | On the Mac | From another computer |
+| --- | --- | --- |
+| Simulation | `http://localhost` | `http://MAC_IP` |
+| Kali attacker | `http://localhost:6088` | `http://MAC_IP:6088` |
+| Caldera | `http://localhost:8888` | `http://MAC_IP:8888` |
+| Wazuh defender | `http://localhost:5601` | `http://MAC_IP:5601` |
+| HMI | `http://localhost:6081` | `http://MAC_IP:6081` |
+| PLC | `http://localhost:8080` | `http://MAC_IP:8080` |
+| Engineering Workstation | `http://localhost:6080` | `http://MAC_IP:6080` |
+
+Find the Mac's current LAN IP with:
+
+```bash
+ipconfig getifaddr en0
+```
+
+For access outside the local network, use a private overlay network such as Tailscale rather than forwarding these lab services directly to the public internet.
+
 <p align="center">
   <img src="/images/dashboard.png" alt="OT security lab dashboard" width="700">
 </p>
@@ -328,4 +362,3 @@ Visit [https://fortiphyd.com](https://fortiphyd.com) to learn more, or [follow u
 
 > **Build. Break. Defend. Learn.**  
 > GRFICSv3 brings industrial cybersecurity to life, no hardware required.
-

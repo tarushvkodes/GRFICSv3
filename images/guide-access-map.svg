@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+  <title id="title">GRFICSv3 browser access map</title>
+  <desc id="desc">A simple map showing a Mac running Colima and Docker, GRFICS containers, and browser access from localhost or another computer on the LAN.</desc>
+  <rect width="1200" height="620" fill="#f7f8fb"/>
+  <style>
+    .h1{font:700 32px Arial,Helvetica,sans-serif;fill:#172033}
+    .h2{font:700 22px Arial,Helvetica,sans-serif;fill:#172033}
+    .t{font:500 17px Arial,Helvetica,sans-serif;fill:#253047}
+    .s{font:500 14px Arial,Helvetica,sans-serif;fill:#536072}
+    .mono{font:600 15px Menlo,Consolas,monospace;fill:#253047}
+    .box{fill:#fff;stroke:#d6dce8;stroke-width:2;rx:10}
+    .mac{fill:#ecf5ff;stroke:#7eb6f2;stroke-width:2;rx:12}
+    .svc{fill:#fff;stroke:#b8c2d6;stroke-width:2;rx:8}
+    .accent{fill:#e8fbf1;stroke:#74c69d;stroke-width:2;rx:10}
+    .warn{fill:#fff7e6;stroke:#f2b84b;stroke-width:2;rx:10}
+    .line{stroke:#738099;stroke-width:3;fill:none;marker-end:url(#arrow)}
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#738099"/>
+    </marker>
+  </defs>
+
+  <text x="48" y="58" class="h1">GRFICSv3: run once, open many browser views</text>
+  <text x="50" y="88" class="s">Use localhost on the Mac, or the Mac LAN/Tailscale IP from another computer.</text>
+
+  <rect x="52" y="132" width="316" height="360" class="box"/>
+  <text x="86" y="176" class="h2">Browsers</text>
+  <rect x="86" y="206" width="246" height="54" class="accent"/>
+  <text x="106" y="238" class="t">Simulation tab</text>
+  <text x="106" y="258" class="mono">:80</text>
+  <rect x="86" y="276" width="246" height="54" class="accent"/>
+  <text x="106" y="308" class="t">Kali attacker tab</text>
+  <text x="106" y="328" class="mono">:6088</text>
+  <rect x="86" y="346" width="246" height="54" class="accent"/>
+  <text x="106" y="378" class="t">Wazuh defender tab</text>
+  <text x="106" y="398" class="mono">:5601</text>
+  <rect x="86" y="416" width="246" height="54" class="accent"/>
+  <text x="106" y="448" class="t">Caldera tab</text>
+  <text x="106" y="468" class="mono">:8888</text>
+
+  <rect x="442" y="118" width="316" height="388" class="mac"/>
+  <text x="476" y="162" class="h2">Your Mac</text>
+  <text x="476" y="190" class="s">Homebrew installs the tools</text>
+  <rect x="476" y="220" width="248" height="58" class="svc"/>
+  <text x="498" y="254" class="t">Colima VM</text>
+  <text x="498" y="274" class="s">4 CPU / 8 GB for Wazuh</text>
+  <rect x="476" y="300" width="248" height="58" class="svc"/>
+  <text x="498" y="334" class="t">Docker + Compose</text>
+  <text x="498" y="354" class="s">Runs the lab containers</text>
+  <rect x="476" y="380" width="248" height="76" class="warn"/>
+  <text x="498" y="414" class="t">Do not public-forward raw ports</text>
+  <text x="498" y="438" class="s">Use LAN or Tailscale instead</text>
+
+  <rect x="832" y="102" width="320" height="436" class="box"/>
+  <text x="866" y="146" class="h2">GRFICS containers</text>
+  <rect x="866" y="176" width="238" height="42" class="svc"/>
+  <text x="886" y="203" class="t">simulation</text>
+  <rect x="866" y="230" width="238" height="42" class="svc"/>
+  <text x="886" y="257" class="t">kali attacker</text>
+  <rect x="866" y="284" width="238" height="42" class="svc"/>
+  <text x="886" y="311" class="t">caldera</text>
+  <rect x="866" y="338" width="238" height="42" class="svc"/>
+  <text x="886" y="365" class="t">wazuh SIEM</text>
+  <rect x="866" y="392" width="238" height="42" class="svc"/>
+  <text x="886" y="419" class="t">EWS / HMI / PLC</text>
+  <rect x="866" y="446" width="238" height="42" class="svc"/>
+  <text x="886" y="473" class="t">router / firewall / IDS</text>
+
+  <path class="line" d="M368 312 C398 312 406 312 442 312"/>
+  <path class="line" d="M758 312 C792 312 800 312 832 312"/>
+  <text x="392" y="296" class="s">HTTP</text>
+  <text x="770" y="296" class="s">Docker networks</text>
+
+  <rect x="84" y="532" width="1032" height="48" fill="#172033" rx="10"/>
+  <text x="110" y="563" class="mono" fill="#fff">Mac: http://localhost:6088    LAN/Tailscale: http://MAC_IP:6088</text>
+</svg>

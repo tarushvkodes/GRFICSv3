@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+  <title id="title">Modbus command flow</title>
+  <desc id="desc">A diagram showing Kali sending Modbus commands through the router to plant devices and defenders watching Wazuh and IDS.</desc>
+  <rect width="1200" height="620" fill="#f7f9fc"/>
+  <style>
+    .title{font:700 34px Arial,Helvetica,sans-serif;fill:#172033}
+    .sub{font:500 16px Arial,Helvetica,sans-serif;fill:#5a6678}
+    .box{fill:#fff;stroke:#d6ddea;stroke-width:2;rx:12}
+    .red{fill:#fff0f0;stroke:#e76f6f;stroke-width:2;rx:12}
+    .blue{fill:#edf6ff;stroke:#77aee8;stroke-width:2;rx:12}
+    .green{fill:#eaf8ef;stroke:#75c893;stroke-width:2;rx:12}
+    .label{font:700 20px Arial,Helvetica,sans-serif;fill:#172033}
+    .small{font:500 15px Arial,Helvetica,sans-serif;fill:#536072}
+    .mono{font:600 14px Menlo,Consolas,monospace;fill:#263349}
+    .line{stroke:#738099;stroke-width:4;fill:none;marker-end:url(#arrow)}
+    .tap{stroke:#77aee8;stroke-width:3;stroke-dasharray:8 7;fill:none;marker-end:url(#bluearrow)}
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#738099"/></marker>
+    <marker id="bluearrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#77aee8"/></marker>
+  </defs>
+  <text x="52" y="58" class="title">What the Kali Modbus commands are doing</text>
+  <text x="54" y="88" class="sub">Kali talks Modbus/TCP to plant devices. Router/IDS and Wazuh are the defender views.</text>
+
+  <rect x="58" y="190" width="210" height="120" class="red"/>
+  <text x="92" y="230" class="label">Kali</text>
+  <text x="92" y="258" class="mono">192.168.90.6</text>
+  <text x="92" y="286" class="small">nmap + Python</text>
+
+  <rect x="368" y="190" width="210" height="120" class="box"/>
+  <text x="404" y="230" class="label">Router</text>
+  <text x="404" y="258" class="mono">192.168.90.200</text>
+  <text x="404" y="286" class="small">firewall + IDS</text>
+
+  <rect x="678" y="122" width="418" height="256" class="green"/>
+  <text x="716" y="162" class="label">ICS Modbus devices</text>
+  <text x="716" y="198" class="mono">192.168.95.10 Feed 1</text>
+  <text x="716" y="226" class="mono">192.168.95.11 Feed 2</text>
+  <text x="716" y="254" class="mono">192.168.95.12 Purge</text>
+  <text x="716" y="282" class="mono">192.168.95.13 Product</text>
+  <text x="716" y="310" class="mono">192.168.95.14 Reactor/Tank</text>
+  <text x="716" y="338" class="mono">192.168.95.15 Analyzer</text>
+
+  <rect x="368" y="438" width="210" height="100" class="blue"/>
+  <text x="404" y="478" class="label">Wazuh</text>
+  <text x="404" y="506" class="mono">localhost:5601</text>
+
+  <rect x="678" y="438" width="210" height="100" class="blue"/>
+  <text x="714" y="478" class="label">Router IDS</text>
+  <text x="714" y="506" class="mono">:5000 / IDS</text>
+
+  <path d="M268 250 C312 250 326 250 368 250" class="line"/>
+  <path d="M578 250 C620 250 636 250 678 250" class="line"/>
+  <path d="M473 310 C473 360 473 388 473 438" class="tap"/>
+  <path d="M473 310 C570 380 650 416 730 438" class="tap"/>
+  <text x="284" y="232" class="mono">TCP/502</text>
+  <text x="594" y="232" class="mono">Modbus/TCP</text>
+</svg>

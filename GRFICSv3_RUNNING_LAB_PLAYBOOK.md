@@ -10,6 +10,8 @@ Only run these commands inside your GRFICS lab.
 
 Open these in separate browser tabs or on separate computers.
 
+![GRFICS browser layout showing which role belongs in each browser](images/playbook-browser-layout.svg)
+
 | Role | Local URL | Login |
 | --- | --- | --- |
 | Simulation | `http://localhost` | none |
@@ -29,6 +31,10 @@ http://MAC_IP:6088
 http://MAC_IP:5601
 http://MAC_IP:8888
 ```
+
+The simulation browser is the main "game" view. Keep it open while you run commands from Kali so you can see the process change.
+
+![GRFICS simulation view](images/sim.png)
 
 ## 1. Know the Lab IPs
 
@@ -64,6 +70,12 @@ kali / kali
 ```
 
 Open Terminal inside the Kali desktop.
+
+![Kali desktop with terminal entry point](images/kali.png)
+
+Commands in this guide go in the Kali terminal, not in your Mac terminal, unless a step specifically says "from your Mac terminal."
+
+![Where to type Kali commands](images/playbook-kali-terminal.svg)
 
 ## 3. Confirm Kali Can Reach the Lab
 
@@ -151,6 +163,8 @@ openplc / openplc
 
 This is the PLC web interface.
 
+![OpenPLC web interface](images/plc.png)
+
 ## 6. Open the HMI from Kali
 
 In Kali's browser, open:
@@ -167,9 +181,15 @@ admin / admin
 
 This is the ScadaLTS/HMI interface.
 
+![HMI / ScadaLTS operator view](images/hmi.png)
+
 ## 7. Read Modbus Values from Kali
 
 The Modbus devices expose values through input registers.
+
+The important path is: type the command in Kali, Kali talks to a Modbus target, and the simulation/HMI shows the physical result.
+
+![Modbus command flow from Kali to the simulation](images/playbook-modbus-flow.svg)
 
 In Kali terminal, run this exact command to read Feed 1:
 
@@ -320,6 +340,8 @@ Log in:
 admin / admin
 ```
 
+![Wazuh defender dashboard](images/dashboard.png)
+
 Go to:
 
 ```text
@@ -369,6 +391,8 @@ Click:
 ```text
 IDS
 ```
+
+![Router firewall and IDS view](images/firewall.png)
 
 Run scans from Kali again:
 
@@ -475,6 +499,8 @@ Login:
 red / fortiphyd-red
 ```
 
+![Caldera web UI](images/caldera.png)
+
 ### Start a Caldera Agent on Kali
 
 In Caldera:
@@ -496,6 +522,8 @@ Caldera will show a shell command.
 Copy it.
 
 In the Kali terminal, paste it.
+
+![Caldera deploy-agent flow into Kali terminal](images/playbook-caldera-agent.svg)
 
 If the copied command uses `localhost` or `0.0.0.0`, replace the server value with:
 
@@ -605,6 +633,8 @@ Use this sequence for a live demo.
 
 In Kali:
 
+![Where the attacker runs commands](images/playbook-kali-terminal.svg)
+
 ```bash
 nmap -sn 192.168.95.0/24
 nmap -sT -sV -p 502 192.168.95.10-15
@@ -652,6 +682,8 @@ HMI
 PLC
 ```
 
+![Simulation view to watch while commands run](images/sim.png)
+
 Look for process changes.
 
 ### Defender
@@ -663,6 +695,8 @@ Wazuh -> Security events
 Router UI -> IDS
 Router UI -> Firewall Logs
 ```
+
+![Defender screens for Wazuh and router IDS](images/dashboard.png)
 
 ### Recover
 
@@ -701,4 +735,3 @@ Check Wazuh agents:
 ```bash
 docker exec wazuh /var/ossec/bin/agent_control -l
 ```
-

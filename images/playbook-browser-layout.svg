@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" role="img" aria-labelledby="title desc">
+  <title id="title">GRFICSv3 browser layout</title>
+  <desc id="desc">A visual layout showing which GRFICS pages to open in browser tabs or separate computers.</desc>
+  <rect width="1200" height="640" fill="#f7f9fc"/>
+  <style>
+    .title{font:700 34px Arial,Helvetica,sans-serif;fill:#172033}
+    .sub{font:500 16px Arial,Helvetica,sans-serif;fill:#5a6678}
+    .label{font:700 19px Arial,Helvetica,sans-serif;fill:#172033}
+    .url{font:600 15px Menlo,Consolas,monospace;fill:#263349}
+    .hint{font:500 14px Arial,Helvetica,sans-serif;fill:#5a6678}
+    .screen{fill:#ffffff;stroke:#d8dfeb;stroke-width:2;rx:14}
+    .tab{fill:#edf3fb;stroke:#c9d5e7;stroke-width:1.5;rx:9}
+    .accent{fill:#e9f8ef;stroke:#7ac99b;stroke-width:2;rx:10}
+    .warn{fill:#fff7df;stroke:#efbd54;stroke-width:2;rx:10}
+  </style>
+  <text x="52" y="58" class="title">Open the lab as separate browser views</text>
+  <text x="54" y="88" class="sub">Use localhost on the Mac. Use MAC_IP from another computer on the same network.</text>
+
+  <rect x="54" y="126" width="1092" height="440" class="screen"/>
+  <rect x="86" y="166" width="230" height="82" class="accent"/>
+  <text x="108" y="198" class="label">Simulation</text>
+  <text x="108" y="224" class="url">http://localhost</text>
+  <text x="108" y="244" class="hint">watch plant behavior</text>
+
+  <rect x="346" y="166" width="230" height="82" class="tab"/>
+  <text x="368" y="198" class="label">Kali</text>
+  <text x="368" y="224" class="url">localhost:6088</text>
+  <text x="368" y="244" class="hint">type commands here</text>
+
+  <rect x="606" y="166" width="230" height="82" class="tab"/>
+  <text x="628" y="198" class="label">Caldera</text>
+  <text x="628" y="224" class="url">localhost:8888</text>
+  <text x="628" y="244" class="hint">run operations</text>
+
+  <rect x="866" y="166" width="230" height="82" class="tab"/>
+  <text x="888" y="198" class="label">Wazuh</text>
+  <text x="888" y="224" class="url">localhost:5601</text>
+  <text x="888" y="244" class="hint">watch defender events</text>
+
+  <rect x="216" y="304" width="230" height="82" class="tab"/>
+  <text x="238" y="336" class="label">HMI</text>
+  <text x="238" y="362" class="url">localhost:6081</text>
+  <text x="238" y="382" class="hint">operator view</text>
+
+  <rect x="476" y="304" width="230" height="82" class="tab"/>
+  <text x="498" y="336" class="label">PLC</text>
+  <text x="498" y="362" class="url">localhost:8080</text>
+  <text x="498" y="382" class="hint">OpenPLC interface</text>
+
+  <rect x="736" y="304" width="230" height="82" class="tab"/>
+  <text x="758" y="336" class="label">EWS</text>
+  <text x="758" y="362" class="url">localhost:6080</text>
+  <text x="758" y="382" class="hint">engineering workstation</text>
+
+  <rect x="300" y="452" width="600" height="58" class="warn"/>
+  <text x="328" y="484" class="label">From another computer: replace localhost with your Mac IP</text>
+  <text x="328" y="506" class="url">http://MAC_IP:6088  /  http://MAC_IP:5601</text>
+</svg>

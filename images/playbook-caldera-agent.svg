@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+  <title id="title">Caldera agent workflow</title>
+  <desc id="desc">A diagram showing copying a Caldera Linux agent command, pasting it into Kali, and seeing the agent appear in Caldera.</desc>
+  <rect width="1200" height="620" fill="#f7f9fc"/>
+  <style>
+    .title{font:700 34px Arial,Helvetica,sans-serif;fill:#172033}
+    .sub{font:500 16px Arial,Helvetica,sans-serif;fill:#5a6678}
+    .panel{fill:#fff;stroke:#d6ddea;stroke-width:2;rx:12}
+    .red{fill:#fff0f0;stroke:#e76f6f;stroke-width:2;rx:12}
+    .ok{fill:#eaf8ef;stroke:#75c893;stroke-width:2;rx:12}
+    .label{font:700 20px Arial,Helvetica,sans-serif;fill:#172033}
+    .small{font:500 15px Arial,Helvetica,sans-serif;fill:#536072}
+    .mono{font:600 14px Menlo,Consolas,monospace;fill:#263349}
+    .line{stroke:#738099;stroke-width:4;fill:none;marker-end:url(#arrow)}
+  </style>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#738099"/></marker></defs>
+  <text x="52" y="58" class="title">Caldera: copy command, paste in Kali, run operation</text>
+  <text x="54" y="88" class="sub">Use this when you want Caldera to task the Kali machine.</text>
+
+  <rect x="70" y="154" width="292" height="240" class="panel"/>
+  <text x="104" y="196" class="label">1. Caldera</text>
+  <text x="104" y="232" class="small">Open Agents</text>
+  <text x="104" y="260" class="small">Deploy Linux agent</text>
+  <text x="104" y="288" class="small">Copy shell command</text>
+  <rect x="104" y="318" width="222" height="42" fill="#edf3fb" stroke="#c9d5e7" rx="8"/>
+  <text x="120" y="345" class="mono">localhost:8888</text>
+
+  <rect x="454" y="154" width="292" height="240" class="red"/>
+  <text x="488" y="196" class="label">2. Kali</text>
+  <text x="488" y="232" class="small">Open Terminal</text>
+  <text x="488" y="260" class="small">Paste the command</text>
+  <text x="488" y="288" class="small">Use 192.168.90.250</text>
+  <rect x="488" y="318" width="222" height="42" fill="#fff" stroke="#e7b6b6" rx="8"/>
+  <text x="504" y="345" class="mono">./splunkd -server ...</text>
+
+  <rect x="838" y="154" width="292" height="240" class="ok"/>
+  <text x="872" y="196" class="label">3. Agent appears</text>
+  <text x="872" y="232" class="small">Return to Caldera</text>
+  <text x="872" y="260" class="small">Agents should show red group</text>
+  <text x="872" y="288" class="small">Start an operation</text>
+  <rect x="872" y="318" width="222" height="42" fill="#fff" stroke="#b6dfc3" rx="8"/>
+  <text x="888" y="345" class="mono">Operations -> Start</text>
+
+  <path d="M362 274 C400 274 416 274 454 274" class="line"/>
+  <path d="M746 274 C784 274 800 274 838 274" class="line"/>
+  <rect x="246" y="460" width="708" height="66" fill="#fff7df" stroke="#efbd54" stroke-width="2" rx="10"/>
+  <text x="278" y="492" class="label">Important</text>
+  <text x="386" y="492" class="small">If the generated command says localhost or 0.0.0.0, change it to</text>
+  <text x="386" y="516" class="mono">http://192.168.90.250:8888</text>
+</svg>

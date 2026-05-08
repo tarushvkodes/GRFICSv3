@@ -1,6 +1,20 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <meta http-equiv="refresh" content="0; url=vnc.html?autoconnect=1">
+    <meta charset="utf-8">
+    <title>GRFICSv3 Kali</title>
+    <script>
+      const params = new URLSearchParams({
+        autoconnect: "1",
+        resize: "remote",
+        host: window.location.hostname,
+        port: window.location.port || (window.location.protocol === "https:" ? "443" : "80"),
+        path: "websockify"
+      });
+      window.location.replace(`vnc.html?${params.toString()}`);
+    </script>
   </head>
+  <body>
+    <a id="fallback" href="vnc.html?autoconnect=1&resize=remote&path=websockify">Open Kali desktop</a>
+  </body>
 </html>

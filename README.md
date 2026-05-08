@@ -11,6 +11,7 @@ This fork adds a simple visual walkthrough for running GRFICSv3 on macOS with Ho
 
 Start here:
 
+- [Running lab playbook: Kali, Caldera, Wazuh, IDS, and Modbus commands](GRFICSv3_RUNNING_LAB_PLAYBOOK.md)
 - [Visual step-by-step guide](GRFICSv3_VISUAL_STEP_BY_STEP_GUIDE.md)
 - [Remote browser access notes](GRFICSv3_REMOTE_ACCESS.md)
 - [Installation writeup](GRFICSv3_INSTALL_WRITEUP.md)

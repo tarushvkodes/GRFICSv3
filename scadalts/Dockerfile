@@ -1,4 +1,4 @@
-FROM eclipse-temurin:11
+FROM eclipse-temurin:11-jdk-jammy
 
 ENV SCADA_LTS_VERSION=2.7.8.1 \
     CATALINA_HOME=/usr/local/tomcat \
@@ -9,15 +9,16 @@ ENV SCADA_LTS_VERSION=2.7.8.1 \
     TOMCAT_USER=tcuser \
     TOMCAT_PASSWORD=tcuser
 
-# Fake systemctl so wazuh-agent postinstall doesn't fail
-RUN printf '#!/bin/bash\necho "[fake-systemctl] $@"\nexit 0\n' \
-    > /usr/local/bin/systemctl && chmod +x /usr/local/bin/systemctl
-
 # Install dependencies
 RUN apt-get update && \
     apt-get install -y wget unzip supervisor mariadb-server libjaxb-api-java libjaxb-java libactivation-java \
     gnupg curl && \
     rm -rf /var/lib/apt/lists/*
+
+# Fake systemctl so wazuh-agent postinstall doesn't fail
+# Must come AFTER mariadb-server so mariadb's postinstall can initialize the system database
+RUN printf '#!/bin/bash\necho "[fake-systemctl] $@"\nexit 0\n' \
+    > /usr/local/bin/systemctl && chmod +x /usr/local/bin/systemctl
 
 
 # Install Tomcat

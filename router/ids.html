@@ -6,7 +6,44 @@
   <div class="card-body">
     <strong>Status:</strong> 🟢 {{ stats.status }} |
     <strong>Alerts Today:</strong> {{ stats.alerts_today }} |
+    <strong>Built-in Rules:</strong> {{ stats.builtin_count }} |
     <strong>Custom Rules:</strong> {{ stats.rules_count }}
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    Built-in Rules
+    <button class="btn btn-sm btn-outline-secondary" type="button"
+            data-bs-toggle="collapse" data-bs-target="#builtinRules">
+      Toggle
+    </button>
+  </div>
+  <div id="builtinRules" class="collapse">
+    <div class="card-body border-bottom pb-2">
+      <select id="builtinSourceFilter" class="form-select form-select-sm w-auto">
+        <option value="">All sources</option>
+        {% for src in builtin_rules | map(attribute='file') | unique | sort %}
+        <option value="{{ src }}">{{ src }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-sm table-striped mb-0">
+        <thead>
+          <tr><th>SID</th><th>Source</th><th>Signature</th></tr>
+        </thead>
+        <tbody id="builtinRulesBody">
+        {% for r in builtin_rules %}
+          <tr data-source="{{ r.file }}">
+            <td class="text-muted small">{{ r.sid }}</td>
+            <td class="text-muted small">{{ r.file }}</td>
+            <td>{{ r.msg }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -47,4 +84,12 @@
     {% endif %}
   </div>
 </div>
+<script>
+document.getElementById('builtinSourceFilter').addEventListener('change', function () {
+  var val = this.value;
+  document.querySelectorAll('#builtinRulesBody tr').forEach(function (row) {
+    row.style.display = (!val || row.dataset.source === val) ? '' : 'none';
+  });
+});
+</script>
 {% endblock %}

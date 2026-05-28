@@ -46,6 +46,7 @@
           <div class="col-md-4">
             <label class="form-label">Incoming Interface</label>
             <select name="iface_in" class="form-select">
+              <option value="">Any Interface</option>
               {% for ifname, label in labels.items() if label != "Admin" %}
                 <option value="{{ ifname }}">{{ label }} ({{ ifname }})</option>
               {% endfor %}
@@ -54,6 +55,7 @@
           <div class="col-md-4">
             <label class="form-label">Protocol</label>
             <select name="proto" class="form-select">
+              <option value="all">All</option>
               <option>tcp</option>
               <option>udp</option>
               <option>icmp</option>
@@ -79,6 +81,10 @@
               <option value="REJECT">Reject</option>
             </select>
           </div>
+          <div class="col-12">
+            <label class="form-label">Comment (optional)</label>
+            <input name="comment" class="form-control" placeholder="e.g. Allow HMI to PLC Modbus">
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -89,51 +95,113 @@
   </div>
 </div>
 
-{% for iface in ['eth1','eth2'] %}
-  <h4 class="mt-4">{{ labels.get(iface, iface) }} ({{ iface }})</h4>
+{% set ns = namespace(row=0) %}
+
+{# Rules with no interface restriction — shown first as they affect all traffic #}
+{% set unbound = rules | selectattr("iface_in", "equalto", "") | list %}
+{% if unbound %}
+<h4 class="mt-4 text-danger">All Interfaces <small class="fs-6 fw-normal text-muted">(no interface restriction)</small></h4>
+<table class="table table-bordered table-sm align-middle">
+  <thead class="table-danger">
+    <tr><th>#</th><th>Src Address</th><th>Dst Address</th><th>Proto</th><th>Port</th><th>Action</th><th>Comment</th><th></th></tr>
+  </thead>
+  <tbody>
+  {% for r in unbound %}
+    {% set rule_idx = rules.index(r) %}
+    {% set ns.row = ns.row + 1 %}
+    <tr class="{{ 'table-warning' if r.action == 'ACCEPT' and r.src == '0.0.0.0/0' and r.dst == '0.0.0.0/0' else '' }}">
+      <td>{{ ns.row }}</td>
+      <td>{{ r.src }}</td>
+      <td>{{ r.dst }}</td>
+      <td>{{ r.proto }}</td>
+      <td>{{ r.dport or '—' }}</td>
+      <td>
+        <span class="badge bg-{{ 'success' if r.action=='ACCEPT' else 'danger' }}">{{ r.action }}</span>
+        {% if r.action == 'ACCEPT' and r.src == '0.0.0.0/0' and r.dst == '0.0.0.0/0' %}
+          <span class="badge bg-warning text-dark ms-1" title="This rule allows all traffic — verify it is intentional">⚠ Allow-Any</span>
+        {% endif %}
+      </td>
+      <td class="text-muted fst-italic small">{{ r.comment or '' }}</td>
+      <td class="text-center">
+        <div class="btn-group">
+          <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Actions</button>
+          <ul class="dropdown-menu">
+            <li>
+              <form action="/move" method="POST">
+                <input type="hidden" name="direction" value="up">
+                <input type="hidden" name="rule_num" value="{{ rule_idx }}">
+                <button type="submit" class="dropdown-item">⬆️ Move Up</button>
+              </form>
+            </li>
+            <li>
+              <form action="/move" method="POST">
+                <input type="hidden" name="direction" value="down">
+                <input type="hidden" name="rule_num" value="{{ rule_idx }}">
+                <button type="submit" class="dropdown-item">⬇️ Move Down</button>
+              </form>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+            <li>
+              <form action="/delete" method="POST">
+                <input type="hidden" name="rule_num" value="{{ rule_idx }}">
+                <button type="submit" class="dropdown-item text-danger">🗑️ Delete</button>
+              </form>
+            </li>
+          </ul>
+        </div>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% for iface, label in labels.items() if label != 'Admin' %}
+  <h4 class="mt-4">{{ label }} ({{ iface }})</h4>
   <table class="table table-bordered table-sm align-middle">
     <thead class="table-light">
-      <tr><th>#</th><th>Src Address</th><th>Dst Address</th><th>Proto</th><th>Port</th><th>Action</th><th></th></tr>
+      <tr><th>#</th><th>Src Address</th><th>Dst Address</th><th>Proto</th><th>Port</th><th>Action</th><th>Comment</th><th></th></tr>
     </thead>
     <tbody>
     {% for r in rules if r.iface_in == iface %}
+      {% set rule_idx = rules.index(r) %}
+      {% set ns.row = ns.row + 1 %}
       <tr>
-        <td>{{ loop.index }}</td>
+        <td>{{ ns.row }}</td>
         <td>{{ r.src }}</td>
         <td>{{ r.dst }}</td>
         <td>{{ r.proto }}</td>
-        <td>{{ r.dport }}</td>
+        <td>{{ r.dport or '—' }}</td>
         <td><span class="badge bg-{{ 'success' if r.action=='ACCEPT' else 'danger' }}">{{ r.action }}</span></td>
-<td class="text-center">
-  <div class="btn-group">
-    <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-      Actions
-    </button>
-    <ul class="dropdown-menu">
-      <li>
-        <form action="/move" method="POST">
-          <input type="hidden" name="direction" value="up">
-          <input type="hidden" name="rule_num" value="{{ loop.index0 }}">
-          <button type="submit" class="dropdown-item">⬆️ Move Up</button>
-        </form>
-      </li>
-      <li>
-        <form action="/move" method="POST">
-          <input type="hidden" name="direction" value="down">
-          <input type="hidden" name="rule_num" value="{{ loop.index0 }}">
-          <button type="submit" class="dropdown-item">⬇️ Move Down</button>
-        </form>
-      </li>
-      <li><hr class="dropdown-divider"></li>
-      <li>
-        <form action="/delete" method="POST" onsubmit="return confirm('Delete this rule?')">
-          <input type="hidden" name="rule_num" value="{{ loop.index0 }}">
-          <button type="submit" class="dropdown-item text-danger">🗑️ Delete</button>
-        </form>
-      </li>
-    </ul>
-  </div>
-</td>
+        <td class="text-muted fst-italic small">{{ r.comment or '' }}</td>
+        <td class="text-center">
+          <div class="btn-group">
+            <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Actions</button>
+            <ul class="dropdown-menu">
+              <li>
+                <form action="/move" method="POST">
+                  <input type="hidden" name="direction" value="up">
+                  <input type="hidden" name="rule_num" value="{{ rule_idx }}">
+                  <button type="submit" class="dropdown-item">⬆️ Move Up</button>
+                </form>
+              </li>
+              <li>
+                <form action="/move" method="POST">
+                  <input type="hidden" name="direction" value="down">
+                  <input type="hidden" name="rule_num" value="{{ rule_idx }}">
+                  <button type="submit" class="dropdown-item">⬇️ Move Down</button>
+                </form>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <form action="/delete" method="POST">
+                  <input type="hidden" name="rule_num" value="{{ rule_idx }}">
+                  <button type="submit" class="dropdown-item text-danger">🗑️ Delete</button>
+                </form>
+              </li>
+            </ul>
+          </div>
+        </td>
       </tr>
     {% endfor %}
     </tbody>
@@ -148,7 +216,7 @@
 <script>
 document.querySelectorAll('form[action="/delete"]').forEach(form => {
   form.addEventListener('submit', e => {
-    if(!confirm('Delete this rule?')) e.preventDefault();
+    if (!confirm('Delete this rule?')) e.preventDefault();
   });
 });
 </script>

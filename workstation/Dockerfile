@@ -109,6 +109,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg \
 
 COPY index.html /opt/noVNC/index.html
 
+COPY shield.svg /opt/noVNC/shield.svg
+RUN sed -i '/<link rel="icon"/d' /opt/noVNC/vnc.html && \
+    sed -i 's|<title>[^<]*</title>|<title>Defender Workstation</title>|' /opt/noVNC/vnc.html && \
+    sed -i 's|</head>|<link rel="icon" type="image/svg+xml" href="shield.svg"></head>|' /opt/noVNC/vnc.html
 
 EXPOSE ${NOVNC_PORT} ${VNC_PORT}
 

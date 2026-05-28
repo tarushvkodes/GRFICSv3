@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Connection States</h2>
+  <div class="d-flex gap-2 align-items-center">
+    <span id="state-count" class="text-muted small">—</span>
+    <button class="btn btn-sm btn-outline-secondary" onclick="refresh()">&#x21bb; Refresh</button>
+    <div class="form-check form-switch mb-0 ms-2">
+      <input class="form-check-input" type="checkbox" id="autorefresh" checked>
+      <label class="form-check-label small" for="autorefresh">Auto (5s)</label>
+    </div>
+  </div>
+</div>
+
+<div class="mb-3">
+  <input type="text" id="filter" class="form-control form-control-sm"
+         placeholder="Filter by IP, port, protocol, or state…">
+</div>
+
+<div class="table-responsive">
+  <table class="table table-bordered table-sm table-hover align-middle">
+    <thead class="table-dark">
+      <tr>
+        <th style="width:3rem">#</th>
+        <th style="width:5rem">Proto</th>
+        <th style="width:9rem">State</th>
+        <th>Source</th>
+        <th>Destination</th>
+        <th style="width:6rem" class="text-end">TTL (s)</th>
+      </tr>
+    </thead>
+    <tbody id="states-body">
+      <tr><td colspan="6" class="text-center text-muted py-3">Loading…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+const STATE_BADGE = {
+  ESTABLISHED: 'success',
+  SYN_SENT:    'info',
+  SYN_RECV:    'info',
+  FIN_WAIT:    'secondary',
+  TIME_WAIT:   'warning',
+  CLOSE_WAIT:  'danger',
+  LAST_ACK:    'secondary',
+  CLOSE:       'danger',
+};
+
+let allStates = [];
+
+function stateBadge(state) {
+  if (!state) return '—';
+  const cls = STATE_BADGE[state] || 'secondary';
+  return `<span class="badge bg-${cls}">${state}</span>`;
+}
+
+function protoBadge(proto) {
+  const cls = proto === 'tcp' ? 'primary' : proto === 'udp' ? 'info' : 'secondary';
+  return `<span class="badge bg-${cls}">${proto}</span>`;
+}
+
+function endpoint(ip, port) {
+  return port ? `<code>${ip}:${port}</code>` : `<code>${ip}</code>`;
+}
+
+function renderTable(states) {
+  const filter = document.getElementById('filter').value.toLowerCase().trim();
+  const visible = filter
+    ? states.filter(s =>
+        [s.proto, s.state, s.src, s.dst, s.sport, s.dport]
+          .join(' ').toLowerCase().includes(filter))
+    : states;
+
+  document.getElementById('state-count').textContent =
+    filter ? `${visible.length} / ${states.length} states` : `${states.length} states`;
+
+  if (visible.length === 0) {
+    document.getElementById('states-body').innerHTML =
+      '<tr><td colspan="6" class="text-center text-muted py-3">No matching connections</td></tr>';
+    return;
+  }
+
+  document.getElementById('states-body').innerHTML = visible.map((s, i) => `
+    <tr>
+      <td class="text-muted">${i + 1}</td>
+      <td>${protoBadge(s.proto)}</td>
+      <td>${stateBadge(s.state)}</td>
+      <td>${endpoint(s.src, s.sport)}</td>
+      <td>${endpoint(s.dst, s.dport)}</td>
+      <td class="text-end font-monospace">${s.ttl}</td>
+    </tr>
+  `).join('');
+}
+
+function refresh() {
+  fetch('/api/states')
+    .then(r => r.json())
+    .then(data => {
+      allStates = data.states || [];
+      renderTable(allStates);
+    })
+    .catch(() => {
+      document.getElementById('state-count').textContent = 'error';
+    });
+}
+
+document.getElementById('filter').addEventListener('input', () => renderTable(allStates));
+
+let timer = setInterval(refresh, 5000);
+document.getElementById('autorefresh').addEventListener('change', e => {
+  clearInterval(timer);
+  if (e.target.checked) timer = setInterval(refresh, 5000);
+});
+
+refresh();
+</script>
+{% endblock %}

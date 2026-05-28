@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-4">DNS</h2>
+
+<div class="row g-4">
+
+  <!-- ── Local Host Entries ─────────────────────────────────────────── -->
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h5 class="mb-0">Local Host Entries
+        <span class="badge bg-secondary ms-1">{{ hosts|length }}</span>
+      </h5>
+      <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addHostModal">
+        + Add Entry
+      </button>
+    </div>
+
+    <table class="table table-bordered table-sm align-middle">
+      <thead class="table-dark">
+        <tr><th>Hostname</th><th>IP Address</th><th>Comment</th><th style="width:5rem"></th></tr>
+      </thead>
+      <tbody>
+        {% if hosts %}
+          {% for h in hosts %}
+          <tr>
+            <td><code>{{ h.hostname }}</code></td>
+            <td><code>{{ h.ip }}</code></td>
+            <td class="text-muted small fst-italic">{{ h.comment or '' }}</td>
+            <td class="text-center">
+              <form action="/dns/delete_host" method="POST"
+                    onsubmit="return confirm('Remove {{ h.hostname }}?')">
+                <input type="hidden" name="idx" value="{{ loop.index0 }}">
+                <button class="btn btn-sm btn-outline-danger">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="4" class="text-center text-muted py-2">No host entries — add one above</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Blocked Domains ───────────────────────────────────────────── -->
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h5 class="mb-0">Blocked Domains
+        <span class="badge bg-secondary ms-1">{{ blocked|length }}</span>
+      </h5>
+      <button class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#addBlockModal">
+        + Block Domain
+      </button>
+    </div>
+
+    <table class="table table-bordered table-sm align-middle">
+      <thead class="table-dark">
+        <tr><th>Domain</th><th>Comment</th><th style="width:5rem"></th></tr>
+      </thead>
+      <tbody>
+        {% if blocked %}
+          {% for b in blocked %}
+          <tr>
+            <td><code>{{ b.domain }}</code>
+              <span class="badge bg-danger ms-1 small">NXDOMAIN</span>
+            </td>
+            <td class="text-muted small fst-italic">{{ b.comment or '' }}</td>
+            <td class="text-center">
+              <form action="/dns/delete_block" method="POST"
+                    onsubmit="return confirm('Unblock {{ b.domain }}?')">
+                <input type="hidden" name="idx" value="{{ loop.index0 }}">
+                <button class="btn btn-sm btn-outline-danger">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="3" class="text-center text-muted py-2">No blocked domains</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Query Log ─────────────────────────────────────────────────── -->
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h5 class="mb-0">Query Log
+        <span id="query-count" class="badge bg-secondary ms-1">{{ queries|length }}</span>
+      </h5>
+      <div class="d-flex gap-2 align-items-center">
+        <span id="log-updated" class="text-muted small"></span>
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input" type="checkbox" id="autorefresh" checked>
+          <label class="form-check-label small" for="autorefresh">Auto (5s)</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="mb-2">
+      <input type="text" id="log-filter" class="form-control form-control-sm"
+             placeholder="Filter by IP, domain, or query type…">
+    </div>
+
+    <table class="table table-bordered table-sm table-hover align-middle font-monospace">
+      <thead class="table-dark">
+        <tr><th style="width:10rem">Time</th><th style="width:4rem">Type</th><th>Domain</th><th style="width:11rem">Source</th></tr>
+      </thead>
+      <tbody id="query-log">
+        {% for q in queries|reverse %}
+        <tr>
+          <td class="text-muted small">{{ q.time }}</td>
+          <td><span class="badge bg-secondary">{{ q.type }}</span></td>
+          <td>{{ q.domain }}</td>
+          <td>{{ q.src }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-center text-muted py-2">No queries logged yet</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div><!-- row -->
+
+<!-- ── Add Host Modal ────────────────────────────────────────────────── -->
+<div class="modal fade" id="addHostModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form action="/dns/add_host" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title">Add Host Entry</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body row g-3">
+          <div class="col-12">
+            <label class="form-label">Hostname</label>
+            <input name="hostname" class="form-control" placeholder="e.g. plc.grfics.local" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label">IP Address</label>
+            <input name="ip" class="form-control" placeholder="e.g. 192.168.95.2" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Comment (optional)</label>
+            <input name="comment" class="form-control" placeholder="e.g. OpenPLC controller">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Add</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── Add Block Modal ───────────────────────────────────────────────── -->
+<div class="modal fade" id="addBlockModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form action="/dns/add_block" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title">Block Domain</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body row g-3">
+          <div class="col-12">
+            <label class="form-label">Domain</label>
+            <input name="domain" class="form-control" placeholder="e.g. evil-c2.com" required>
+            <div class="form-text">Blocks the domain and all subdomains (returns NXDOMAIN).</div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Comment (optional)</label>
+            <input name="comment" class="form-control" placeholder="e.g. Known C2 domain">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">Block</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+let allQueries = {{ queries | tojson }};
+
+function renderLog(queries) {
+  const filter = document.getElementById('log-filter').value.toLowerCase().trim();
+  const visible = filter
+    ? queries.filter(q =>
+        [q.type, q.domain, q.src].join(' ').toLowerCase().includes(filter))
+    : queries;
+
+  document.getElementById('query-count').textContent = visible.length;
+
+  if (visible.length === 0) {
+    document.getElementById('query-log').innerHTML =
+      '<tr><td colspan="4" class="text-center text-muted py-2">No matching queries</td></tr>';
+    return;
+  }
+
+  // Show newest first
+  document.getElementById('query-log').innerHTML = [...visible].reverse().map(q => `
+    <tr>
+      <td class="text-muted small">${q.time}</td>
+      <td><span class="badge bg-secondary">${q.type}</span></td>
+      <td>${q.domain}</td>
+      <td>${q.src}</td>
+    </tr>
+  `).join('');
+}
+
+function refreshLog() {
+  fetch('/api/dns/queries')
+    .then(r => r.json())
+    .then(data => {
+      allQueries = data.queries || [];
+      renderLog(allQueries);
+      document.getElementById('log-updated').textContent =
+        'Updated ' + new Date().toLocaleTimeString();
+    })
+    .catch(() => {});
+}
+
+document.getElementById('log-filter').addEventListener('input', () => renderLog(allQueries));
+
+let timer = setInterval(refreshLog, 5000);
+document.getElementById('autorefresh').addEventListener('change', e => {
+  clearInterval(timer);
+  if (e.target.checked) timer = setInterval(refreshLog, 5000);
+});
+</script>
+{% endblock %}

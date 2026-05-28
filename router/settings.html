@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Settings</h2>
+
+<div class="card mb-4">
+  <div class="card-header">Change Password</div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('change_password') }}" style="max-width:400px">
+      <div class="mb-3">
+        <label class="form-label">Current Password</label>
+        <input type="password" name="current_password" class="form-control" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">New Password</label>
+        <input type="password" name="new_password" class="form-control" required minlength="6">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Confirm New Password</label>
+        <input type="password" name="confirm_password" class="form-control" required minlength="6">
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Update Password</button>
+    </form>
+  </div>
+</div>
+
+{% if current_role == "admin" %}
+<div class="card mb-4">
+  <div class="card-header">Users</div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-striped mb-0">
+      <thead>
+        <tr><th>Username</th><th>Role</th><th></th></tr>
+      </thead>
+      <tbody>
+      {% for u in users %}
+        <tr>
+          <td>{{ u.username }}{% if u.username == current_user %} <span class="badge bg-secondary">you</span>{% endif %}</td>
+          <td><span class="badge {% if u.role == 'admin' %}bg-danger{% else %}bg-info text-dark{% endif %}">{{ u.role }}</span></td>
+          <td class="text-end">
+            {% if u.username != current_user %}
+            <form method="post" action="{{ url_for('delete_user') }}" class="d-inline"
+                  onsubmit="return confirm('Delete user {{ u.username }}?')">
+              <input type="hidden" name="username" value="{{ u.username }}">
+              <button class="btn btn-sm btn-outline-danger">Delete</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">Add User</div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('add_user') }}" class="row g-2 align-items-end" style="max-width:600px">
+      <div class="col-auto">
+        <label class="form-label">Username</label>
+        <input type="text" name="username" class="form-control form-control-sm" required>
+      </div>
+      <div class="col-auto">
+        <label class="form-label">Password</label>
+        <input type="password" name="password" class="form-control form-control-sm" required minlength="6">
+      </div>
+      <div class="col-auto">
+        <label class="form-label">Role</label>
+        <select name="role" class="form-select form-select-sm">
+          <option value="viewer">Viewer (read-only)</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-success">Add User</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

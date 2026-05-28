@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>ARP Monitor</h2>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <strong>Known Devices:</strong> {{ devices | length }} |
+    <strong>Events:</strong> {{ events | length }}
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">Known Devices</div>
+  <div class="card-body p-0">
+    {% if devices %}
+    <table class="table table-sm table-striped mb-0">
+      <thead>
+        <tr><th>IP Address</th><th>MAC Address</th><th>Interface</th><th>First Seen</th><th>Last Seen</th></tr>
+      </thead>
+      <tbody>
+      {% for ip, d in devices.items() | sort %}
+        <tr>
+          <td>{{ ip }}</td>
+          <td><code>{{ d.mac }}</code></td>
+          <td class="text-muted small">{{ d.iface }}</td>
+          <td class="text-muted small">{{ d.first_seen }}</td>
+          <td class="text-muted small">{{ d.last_seen }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <div class="card-body"><p class="text-muted">No devices observed yet.</p></div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">ARP Events</div>
+  <div class="card-body p-0">
+    {% if events %}
+    <table class="table table-sm mb-0">
+      <thead>
+        <tr><th>Time</th><th>Event</th><th>IP</th><th>MAC</th><th>Old MAC</th><th>Interface</th></tr>
+      </thead>
+      <tbody>
+      {% for e in events | reverse %}
+        <tr class="{% if e.event == 'changed_mac' %}table-danger{% elif e.event == 'new_station' %}table-warning{% endif %}">
+          <td class="text-muted small">{{ e.timestamp }}</td>
+          <td>
+            {% if e.event == 'changed_mac' %}
+              <span class="badge bg-danger">MAC changed</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">new station</span>
+            {% endif %}
+          </td>
+          <td>{{ e.ip }}</td>
+          <td><code>{{ e.mac }}</code></td>
+          <td>{% if e.old_mac %}<code class="text-muted">{{ e.old_mac }}</code>{% else %}—{% endif %}</td>
+          <td class="text-muted small">{{ e.iface }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <div class="card-body"><p class="text-muted">No ARP events recorded yet.</p></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

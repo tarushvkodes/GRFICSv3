@@ -1,31 +1,73 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 import subprocess
-import json, os, functools
+import json, os, functools, time, glob, re
+from werkzeug.security import generate_password_hash, check_password_hash
+from collections import Counter
 from pathlib import Path
 from datetime import datetime
 
 app = Flask(__name__)
 
-INTERFACE_LABELS = {
-    "eth0": "Admin",
-    "eth1": "LAN",
-    "eth2": "WAN"
-}
+def _detect_interface_labels():
+    _FALLBACK = {"eth0": "Admin", "eth1": "LAN", "eth2": "DMZ"}
+    try:
+        out = subprocess.check_output(["ip", "-4", "addr"], text=True)
+    except Exception:
+        return _FALLBACK
+
+    iface_ips = {}
+    current = None
+    for line in out.splitlines():
+        m = re.match(r'^\d+:\s+(\S+):', line)
+        if m:
+            current = m.group(1).split('@')[0]
+        ip_m = re.search(r'inet (\d+\.\d+\.\d+\.\d+)/', line)
+        if ip_m and current and current != 'lo':
+            iface_ips.setdefault(current, []).append(ip_m.group(1))
+
+    labels = {}
+    for iface, ips in iface_ips.items():
+        if iface in ('lo', 'wg0'):
+            continue
+        for ip in ips:
+            if ip.startswith('192.168.95.'):
+                labels[iface] = 'LAN'
+            elif ip.startswith('192.168.90.'):
+                labels[iface] = 'DMZ'
+            else:
+                labels.setdefault(iface, 'Admin')
+
+    return labels if labels else _FALLBACK
+
+INTERFACE_LABELS = _detect_interface_labels()
 
 # SECRET_KEY is required for sessions. Set via env var in compose or host.
 # For quick local testing you can hardcode, but better: export SECRET_KEY before starting.
 app.secret_key = os.environ.get("FWUI_SECRET_KEY", "dev-secret-key-change-me")
 
-# default user (will be persisted when load_config runs if config exists)
-DEFAULT_USER = {"username": "admin", "password": "password"}  # intentionally weak for labs
+# intentionally weak defaults for lab use
+DEFAULT_USERS = [{"username": "admin", "password_hash": generate_password_hash("password"), "role": "admin"}]
 
-credentials = DEFAULT_USER.copy()  # dict with username/password
+users = [u.copy() for u in DEFAULT_USERS]
 
 LOG_FILE = "/var/log/ulog/netfilter_log.json"
 FIREWALL_RULES_PATH = "/etc/firewall/rules"
 CONFIG_PATH = "/etc/firewall/config.json"
 IDS_ALERTS_FILE = "/etc/suricata/alerts.json"
 IDS_RULES_FILE = "/etc/suricata/rules/local.rules"
+ICS_SUBNET = "192.168.95.0/24"   # trusted LAN — default allow outbound
+
+ARPMON_STATE = "/var/lib/arpmon/state.json"
+ARPMON_LOG   = "/var/log/arpmon/events.json"
+
+DNS_CONFIG_PATH = "/etc/firewall/dns_config.json"
+WG_CONFIG_PATH = "/etc/firewall/wg_config.json"
+WG_CONF_PATH = "/etc/wireguard/wg0.conf"
+WG_VPN_SUBNET = "10.100.0.0/24"
+WG_SERVER_ADDR = "10.100.0.1/24"
+DNS_HOSTS_PATH = "/etc/firewall/dns_hosts"
+DNS_BLOCKED_PATH = "/etc/firewall/dns_blocked.conf"
+DNSMASQ_LOG = "/var/log/dnsmasq/dnsmasq.log"
 
 pending_rules = []
 dirty = False
@@ -71,6 +113,56 @@ def get_recent_alerts(limit=50):
                 continue
     return alerts[-limit:]
 
+
+RULES_DIR = "/etc/suricata/rules"
+
+
+def parse_rule_lines(text):
+    # Rejoin lines ending with \ before parsing (multi-line rule format)
+    logical_lines = []
+    buf = ""
+    for raw in text.splitlines():
+        stripped = raw.rstrip()
+        if stripped.endswith("\\"):
+            buf += stripped[:-1]
+        else:
+            buf += stripped
+            logical_lines.append(buf)
+            buf = ""
+    if buf:
+        logical_lines.append(buf)
+
+    rules = []
+    for line in logical_lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        msg_m = re.search(r'msg:"([^"]+)"', line)
+        sid_m = re.search(r'\bsid:(\d+)', line)
+        rules.append({
+            "sid": sid_m.group(1) if sid_m else "—",
+            "msg": msg_m.group(1) if msg_m else line[:80],
+        })
+    return rules
+
+
+def load_builtin_rules():
+    rules = []
+    for path in sorted(glob.glob(f"{RULES_DIR}/*.rules")):
+        if os.path.basename(path) == "local.rules":
+            continue
+        try:
+            with open(path) as f:
+                text = f.read()
+        except OSError:
+            continue
+        label = os.path.basename(path).replace(".rules", "")
+        for r in parse_rule_lines(text):
+            r["file"] = label
+            rules.append(r)
+    return rules
+
+
 def load_json(path, default=[]):
     try:
         with open(path, "r") as f:
@@ -85,27 +177,288 @@ def save_json(path, data):
         json.dump(data, f, indent=2)
 
 
+DEFAULT_RULES = [
+    {
+        "iface_in": "",
+        "iface_out": "",
+        "src": "0.0.0.0/0",
+        "dst": "0.0.0.0/0",
+        "proto": "all",
+        "dport": "",
+        "action": "ACCEPT",
+        "comment": "TEMP - allow all traffic for troubleshooting - DO NOT LEAVE IN PRODUCTION",
+    }
+]
+
 def load_config():
-    global pending_rules, dirty, credentials
+    global pending_rules, dirty, users
     if os.path.exists(CONFIG_PATH):
         with open(CONFIG_PATH) as f:
             data = json.load(f)
             pending_rules = data.get("rules", [])
-            # optional: allow storing credentials in the config file
-            if "auth" in data:
-                credentials = data["auth"]
+            if "users" in data:
+                users = data["users"]
+            elif "auth" in data:
+                # migrate legacy plaintext single-user record
+                old = data["auth"]
+                users = [{"username": old["username"],
+                          "password_hash": generate_password_hash(old["password"]),
+                          "role": "admin"}]
+                save_config()
     else:
-        pending_rules = []
+        pending_rules = DEFAULT_RULES.copy()
+        save_config()
     dirty = False
 
 
 def save_config():
-    data = {"rules": pending_rules, "auth": credentials}
+    data = {"rules": pending_rules, "users": users}
     with open(CONFIG_PATH, "w") as f:
         json.dump(data, f, indent=2)
 
 
-# --- login helper/decorator ---
+# --- traffic stats helpers ---
+
+_iface_prev = {}  # {iface: (monotonic_time, {rx_bytes, rx_packets, tx_bytes, tx_packets})}
+
+def read_proc_net_dev():
+    stats = {}
+    try:
+        with open('/proc/net/dev') as f:
+            for line in f.readlines()[2:]:
+                parts = line.split()
+                if len(parts) < 11:
+                    continue
+                iface = parts[0].rstrip(':')
+                stats[iface] = {
+                    'rx_bytes':   int(parts[1]),
+                    'rx_packets': int(parts[2]),
+                    'tx_bytes':   int(parts[9]),
+                    'tx_packets': int(parts[10]),
+                }
+    except FileNotFoundError:
+        pass
+    return stats
+
+
+def get_interface_rates():
+    now = time.monotonic()
+    current = read_proc_net_dev()
+    rates = {}
+    for iface in INTERFACE_LABELS:
+        if iface not in current:
+            rates[iface] = {'rx_bps': 0.0, 'rx_pps': 0.0, 'tx_bps': 0.0, 'tx_pps': 0.0}
+            continue
+        cur = current[iface]
+        if iface in _iface_prev:
+            prev_time, prev = _iface_prev[iface]
+            dt = now - prev_time
+            if dt > 0:
+                rates[iface] = {
+                    'rx_bps': max(0.0, (cur['rx_bytes']   - prev['rx_bytes'])   / dt),
+                    'rx_pps': max(0.0, (cur['rx_packets'] - prev['rx_packets']) / dt),
+                    'tx_bps': max(0.0, (cur['tx_bytes']   - prev['tx_bytes'])   / dt),
+                    'tx_pps': max(0.0, (cur['tx_packets'] - prev['tx_packets']) / dt),
+                }
+            else:
+                rates[iface] = {'rx_bps': 0.0, 'rx_pps': 0.0, 'tx_bps': 0.0, 'tx_pps': 0.0}
+        else:
+            rates[iface] = {'rx_bps': 0.0, 'rx_pps': 0.0, 'tx_bps': 0.0, 'tx_pps': 0.0}
+        _iface_prev[iface] = (now, cur)
+    return rates
+
+
+def parse_conntrack():
+    entries = []
+    try:
+        with open('/proc/net/nf_conntrack') as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) < 5:
+                    continue
+                l4proto = parts[2]
+                ttl = int(parts[4])
+                # TCP has a state word at position 5 before the key=value pairs
+                state = ''
+                if l4proto == 'tcp' and len(parts) > 5 and '=' not in parts[5]:
+                    state = parts[5]
+                # Collect key=value pairs; first occurrence = original direction
+                kv = {}
+                for p in parts:
+                    if '=' in p:
+                        k, v = p.split('=', 1)
+                        if k not in kv:
+                            kv[k] = v
+                entries.append({
+                    'proto': l4proto,
+                    'state': state,
+                    'ttl':   ttl,
+                    'src':   kv.get('src',   '?'),
+                    'dst':   kv.get('dst',   '?'),
+                    'sport': kv.get('sport', ''),
+                    'dport': kv.get('dport', ''),
+                })
+    except (FileNotFoundError, ValueError):
+        pass
+    return entries
+
+
+def get_top_talkers(entries, n=10):
+    counts = Counter(e['src'] for e in entries if e['src'] != '?')
+    return [{'ip': ip, 'connections': count} for ip, count in counts.most_common(n)]
+
+
+# --- dnsmasq helpers ---
+
+def load_dns_config():
+    try:
+        with open(DNS_CONFIG_PATH) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"hosts": [], "blocked": []}
+
+
+def save_dns_config(config):
+    with open(DNS_CONFIG_PATH, "w") as f:
+        json.dump(config, f, indent=2)
+
+
+def apply_dns_config(config):
+    """Write dnsmasq host and block files then restart dnsmasq via supervisorctl."""
+    host_lines = [f"{h['ip']}\t{h['hostname']}" for h in config.get("hosts", [])]
+    with open(DNS_HOSTS_PATH, "w") as f:
+        f.write("\n".join(host_lines) + ("\n" if host_lines else ""))
+
+    block_lines = [f"address=/{b['domain']}/" for b in config.get("blocked", [])]
+    with open(DNS_BLOCKED_PATH, "w") as f:
+        f.write("\n".join(block_lines) + ("\n" if block_lines else ""))
+
+    subprocess.run(["supervisorctl", "restart", "dnsmasq"], check=False)
+
+
+def get_dns_queries(limit=100):
+    queries = []
+    try:
+        with open(DNSMASQ_LOG) as f:
+            for line in f:
+                if "query[" not in line:
+                    continue
+                parts = line.strip().split()
+                q_idx = next((i for i, p in enumerate(parts) if "query[" in p), None)
+                if q_idx is None:
+                    continue
+                try:
+                    qtype  = parts[q_idx].split("[")[1].rstrip("]")
+                    domain = parts[q_idx + 1]
+                    src    = parts[q_idx + 3] if len(parts) > q_idx + 3 else "?"
+                    queries.append({
+                        "time":   " ".join(parts[:3]),
+                        "type":   qtype,
+                        "domain": domain,
+                        "src":    src,
+                    })
+                except (IndexError, ValueError):
+                    continue
+    except FileNotFoundError:
+        pass
+    return queries[-limit:]
+
+
+# --- wireguard helpers ---
+
+def load_wg_config():
+    try:
+        with open(WG_CONFIG_PATH) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"server": {}, "peers": []}
+
+
+def save_wg_config(config):
+    os.makedirs(os.path.dirname(WG_CONFIG_PATH), exist_ok=True)
+    with open(WG_CONFIG_PATH, "w") as f:
+        json.dump(config, f, indent=2)
+
+
+def wg_genkey():
+    priv = subprocess.check_output(["wg", "genkey"], text=True).strip()
+    pub = subprocess.check_output(["wg", "pubkey"], input=priv, text=True).strip()
+    return priv, pub
+
+
+def write_wg_conf(config):
+    server = config.get("server", {})
+    lines = [
+        "[Interface]",
+        f"PrivateKey = {server['private_key']}",
+        f"ListenPort = {server.get('listen_port', 51820)}",
+        f"Address = {server.get('address', WG_SERVER_ADDR)}",
+        "",
+    ]
+    for peer in config.get("peers", []):
+        lines += [
+            f"# {peer.get('name', 'peer')}",
+            "[Peer]",
+            f"PublicKey = {peer['public_key']}",
+            f"AllowedIPs = {peer['allowed_ips']}",
+            "",
+        ]
+    os.makedirs("/etc/wireguard", exist_ok=True)
+    with open(WG_CONF_PATH, "w") as f:
+        f.write("\n".join(lines))
+
+
+def _ensure_wg_masquerade():
+    r = subprocess.run(
+        ["iptables", "-t", "nat", "-C", "POSTROUTING", "-s", WG_VPN_SUBNET, "-j", "MASQUERADE"],
+        capture_output=True,
+    )
+    if r.returncode != 0:
+        subprocess.run(
+            ["iptables", "-t", "nat", "-A", "POSTROUTING", "-s", WG_VPN_SUBNET, "-j", "MASQUERADE"],
+            check=False,
+        )
+
+
+def apply_wg(config):
+    write_wg_conf(config)
+    subprocess.run(["wg-quick", "down", "wg0"], capture_output=True)
+    result = subprocess.run(["wg-quick", "up", "wg0"], capture_output=True, text=True)
+    if result.returncode == 0:
+        _ensure_wg_masquerade()
+    return result
+
+
+def parse_wg_show():
+    """Parse `wg show wg0 dump` into a dict keyed by peer public key."""
+    try:
+        out = subprocess.check_output(
+            ["wg", "show", "wg0", "dump"], text=True, stderr=subprocess.DEVNULL
+        )
+    except subprocess.CalledProcessError:
+        return {}
+    status = {}
+    for line in out.strip().splitlines()[1:]:  # skip interface line
+        parts = line.split("\t")
+        if len(parts) < 8:
+            continue
+        pubkey = parts[0]
+        last_hs = int(parts[4]) if parts[4] != "0" else 0
+        status[pubkey] = {
+            "endpoint": parts[2] if parts[2] != "(none)" else None,
+            "allowed_ips": parts[3],
+            "last_handshake": last_hs,
+            "rx_bytes": int(parts[5]),
+            "tx_bytes": int(parts[6]),
+        }
+    return status
+
+
+def wg_iface_up():
+    return subprocess.run(["ip", "link", "show", "wg0"], capture_output=True).returncode == 0
+
+
+# --- login helpers/decorators ---
 def login_required(view):
     @functools.wraps(view)
     def wrapped_view(*args, **kwargs):
@@ -114,16 +467,28 @@ def login_required(view):
         return view(*args, **kwargs)
     return wrapped_view
 
+
+def admin_required(view):
+    @functools.wraps(view)
+    def wrapped_view(*args, **kwargs):
+        if session.get("role") != "admin":
+            flash("Administrator access required.", "danger")
+            return redirect(url_for("index"))
+        return view(*args, **kwargs)
+    return wrapped_view
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    next_url = request.args.get("next") or url_for("index")
+    next_url = request.args.get("next") or url_for("dashboard")
     if request.method == "POST":
         username = request.form.get("username", "")
         password = request.form.get("password", "")
-        # simple check against stored credentials
-        if username == credentials.get("username") and password == credentials.get("password"):
+        user_rec = next((u for u in users if u["username"] == username), None)
+        if user_rec and check_password_hash(user_rec["password_hash"], password):
             session["logged_in"] = True
             session["username"] = username
+            session["role"] = user_rec["role"]
             flash("Logged in", "success")
             return redirect(next_url)
         else:
@@ -168,8 +533,46 @@ def parse_iptables_rules():
         rules.append(rule)
     return rules
 
-@app.route("/", endpoint="index")
-@app.route("/firewall")
+@app.route("/dashboard")
+@app.route("/")
+@login_required
+def dashboard():
+    return render_template("dashboard.html", active_page="dashboard", labels=INTERFACE_LABELS)
+
+
+@app.route("/api/stats")
+@login_required
+def api_stats():
+    entries = parse_conntrack()
+    rates = get_interface_rates()
+    return jsonify({
+        'connection_count': len(entries),
+        'interfaces': {
+            iface: {'label': INTERFACE_LABELS.get(iface, iface), **data}
+            for iface, data in rates.items()
+        },
+        'top_talkers': get_top_talkers(entries),
+    })
+
+
+@app.route("/states")
+@login_required
+def states():
+    return render_template("states.html", active_page="states")
+
+
+_CLOSED_STATES = {'TIME_WAIT', 'CLOSE', 'CLOSE_WAIT', 'LAST_ACK'}
+
+@app.route("/api/states")
+@login_required
+def api_states():
+    entries = [e for e in parse_conntrack()
+               if e['state'] not in _CLOSED_STATES
+               and e['src'] != '127.0.0.1' and e['dst'] != '127.0.0.1']
+    return jsonify({'states': entries, 'count': len(entries)})
+
+
+@app.route("/firewall", endpoint="index")
 @app.route("/index")
 @login_required
 def firewall():
@@ -180,6 +583,7 @@ def firewall():
 
 @app.route("/delete", methods=["POST"])
 @login_required
+@admin_required
 def delete_rule():
     global dirty
     idx = int(request.form["rule_num"])
@@ -192,6 +596,7 @@ def delete_rule():
 
 @app.route("/add", methods=["POST"])
 @login_required
+@admin_required
 def add_rule():
     global dirty
     iface_in = request.form.get("iface_in") 
@@ -206,6 +611,7 @@ def add_rule():
     if not dst or dst.lower() == "any": 
         dst = "0.0.0.0/0" 
 
+    comment = request.form.get("comment", "").strip()
     rule = {
         "iface_in": iface_in,
         "iface_out": iface_out,
@@ -214,6 +620,7 @@ def add_rule():
         "proto": proto,
         "dport": dport,
         "action": action,
+        "comment": comment,
     }
 
     pending_rules.append(rule)
@@ -225,6 +632,7 @@ def add_rule():
 
 @app.route("/move", methods=["POST"])
 @login_required
+@admin_required
 def move_rule():
     global dirty
     idx = int(request.form["rule_num"])
@@ -240,18 +648,12 @@ def move_rule():
     return redirect(url_for("index"))
 
 
-@app.route("/apply", methods=["POST"])
-@login_required
-def apply_changes():
-    # Flush FORWARD chain
-    subprocess.run(["iptables", "-F", "FORWARD"], check=False)
-    # Reapply each saved rule
-    load_config()
-    rules = pending_rules
+def build_iptables_rules(rules):
+    """Return an iptables-restore compatible ruleset string for the given rule list."""
     lines = [
         "*filter",
         ":INPUT ACCEPT [0:0]",
-        ":FORWARD ACCEPT [0:0]",
+        ":FORWARD DROP [0:0]",
         ":OUTPUT ACCEPT [0:0]",
         ":LOGDROP - [0:0]",
         ":LOGREJECT - [0:0]",
@@ -259,40 +661,63 @@ def apply_changes():
         "-A LOGDROP -j DROP",
         "-A LOGREJECT -m limit --limit 5/second -j NFLOG --nflog-group 1 --nflog-prefix \"FW REJECT: \" ",
         "-A LOGREJECT -j REJECT",
+        # Stateful base rules: pass return traffic, drop invalid packets
+        "-A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
+        "-A FORWARD -m conntrack --ctstate INVALID -j DROP",
     ]
     for r in rules:
-        line = f"-A FORWARD -p {r['proto']} -s {r['src']} -d {r['dst']}"
+        proto = r['proto']
+        if proto == 'all':
+            line = f"-A FORWARD -s {r['src']} -d {r['dst']}"
+        else:
+            line = f"-A FORWARD -p {proto} -s {r['src']} -d {r['dst']}"
         if r.get('iface_in'): line += f" -i {r['iface_in']}"
         if r.get('iface_out'): line += f" -o {r['iface_out']}"
-        if r.get('dport') and r['proto'] in ['tcp','udp']: line += f" --dport {r['dport']}"
-        if r["action"] in ["DROP","REJECT"]:
-            act = "LOG" + r["action"]
-            line += f" -j {act}"
+        if r.get('dport') and proto in ['tcp', 'udp']: line += f" --dport {r['dport']}"
+        if r["action"] in ["DROP", "REJECT"]:
+            line += f" -j LOG{r['action']}"
         else:
             line += f" -j {r['action']}"
-
         lines.append(line)
-
+    # Allow forwarding to/from WireGuard VPN interface when it's up
+    lines.append("-A FORWARD -i wg0 -j ACCEPT")
+    lines.append("-A FORWARD -o wg0 -j ACCEPT")
+    # Default allow for ICS-originated traffic (trusted → untrusted).
+    # Match on source subnet rather than interface name — interface assignment
+    # is not deterministic in Docker containers.
+    lines.append(f"-A FORWARD -s {ICS_SUBNET} -j ACCEPT")
+    # Catch-all: log and drop everything else (untrusted inbound not matched above)
+    lines.append("-A FORWARD -j LOGDROP")
     lines.append("COMMIT")
-    rules_text = "\n".join(lines) + "\n"
+    return "\n".join(lines) + "\n"
 
+
+def _apply_rules_now(rules):
+    """Write the iptables ruleset for `rules` to disk and load it. Returns the proc result."""
+    os.makedirs(os.path.dirname(FIREWALL_RULES_PATH), exist_ok=True)
+    rules_text = build_iptables_rules(rules)
     with open(FIREWALL_RULES_PATH, "w") as f:
         f.write(rules_text)
+    subprocess.run(["iptables", "-F", "FORWARD"], check=False)
+    return subprocess.run(["iptables-restore", "-n", FIREWALL_RULES_PATH])
 
-    proc = subprocess.run(
-        ["iptables-restore", "-n", FIREWALL_RULES_PATH],  # -n = don't flush counters
-    )
 
+@app.route("/apply", methods=["POST"])
+@login_required
+@admin_required
+def apply_changes():
+    load_config()
+    proc = _apply_rules_now(pending_rules)
     if proc.returncode != 0:
         flash("Error applying firewall rules!", "danger")
     else:
         flash("Firewall rules applied successfully.", "success")
     save_config()
-
     return redirect(url_for("index"))
 
 @app.route("/revert", methods=["POST"])
 @login_required
+@admin_required
 def revert_changes():
     global dirty
     rules = parse_iptables_rules()
@@ -314,10 +739,12 @@ def ids():
         rule_text = ""
 
     alerts = get_recent_alerts()
+    builtin_rules = load_builtin_rules()
     stats = {
         "status": "Running",
         "alerts_today": len(alerts),
         "rules_count": len(rule_text.strip().splitlines()) if rule_text.strip() else 0,
+        "builtin_count": len(builtin_rules),
     }
 
     return render_template(
@@ -325,12 +752,14 @@ def ids():
         active_page="ids",
         alerts=alerts,
         rule_text=rule_text,
+        builtin_rules=builtin_rules,
         stats=stats,
     )
 
 
 @app.route("/ids/save_rules", methods=["POST"])
 @login_required
+@admin_required
 def save_rules():
     new_rules = request.form.get("rules_text", "")
     os.makedirs(os.path.dirname(IDS_RULES_FILE), exist_ok=True)
@@ -355,11 +784,442 @@ def firewall_logs():
     return render_template("firewall_logs.html", entries=entries, user=user)
 
 
+@app.route("/dns")
+@login_required
+def dns():
+    config = load_dns_config()
+    queries = get_dns_queries(limit=50)
+    return render_template("dns.html", active_page="dns",
+                           hosts=config.get("hosts", []),
+                           blocked=config.get("blocked", []),
+                           queries=queries)
+
+
+@app.route("/dns/add_host", methods=["POST"])
+@login_required
+@admin_required
+def dns_add_host():
+    hostname = request.form.get("hostname", "").strip().lower()
+    ip = request.form.get("ip", "").strip()
+    comment = request.form.get("comment", "").strip()
+    if hostname and ip:
+        config = load_dns_config()
+        config["hosts"].append({"hostname": hostname, "ip": ip, "comment": comment})
+        save_dns_config(config)
+        apply_dns_config(config)
+        flash(f"Host entry added: {hostname} → {ip}", "success")
+    else:
+        flash("Hostname and IP are required.", "danger")
+    return redirect(url_for("dns"))
+
+
+@app.route("/dns/delete_host", methods=["POST"])
+@login_required
+@admin_required
+def dns_delete_host():
+    idx = int(request.form["idx"])
+    config = load_dns_config()
+    if 0 <= idx < len(config["hosts"]):
+        removed = config["hosts"].pop(idx)
+        save_dns_config(config)
+        apply_dns_config(config)
+        flash(f"Host entry removed: {removed['hostname']}", "success")
+    return redirect(url_for("dns"))
+
+
+@app.route("/dns/add_block", methods=["POST"])
+@login_required
+@admin_required
+def dns_add_block():
+    # Strip leading wildcards/dots so "*.evil.com" and "evil.com" both become "evil.com"
+    domain = request.form.get("domain", "").strip().lower().lstrip("*.").strip(".")
+    comment = request.form.get("comment", "").strip()
+    if domain:
+        config = load_dns_config()
+        config["blocked"].append({"domain": domain, "comment": comment})
+        save_dns_config(config)
+        apply_dns_config(config)
+        flash(f"Domain blocked: {domain}", "success")
+    else:
+        flash("Domain is required.", "danger")
+    return redirect(url_for("dns"))
+
+
+@app.route("/dns/delete_block", methods=["POST"])
+@login_required
+@admin_required
+def dns_delete_block():
+    idx = int(request.form["idx"])
+    config = load_dns_config()
+    if 0 <= idx < len(config["blocked"]):
+        removed = config["blocked"].pop(idx)
+        save_dns_config(config)
+        apply_dns_config(config)
+        flash(f"Block removed: {removed['domain']}", "success")
+    return redirect(url_for("dns"))
+
+
+@app.route("/api/dns/queries")
+@login_required
+def api_dns_queries():
+    queries = get_dns_queries(limit=100)
+    return jsonify({"queries": queries, "count": len(queries)})
+
+
+# --- wireguard routes ---
+
+@app.route("/vpn")
+@login_required
+def vpn():
+    config = load_wg_config()
+    peer_status = parse_wg_show()
+    return render_template(
+        "wireguard.html",
+        active_page="vpn",
+        config=config,
+        peer_status=peer_status,
+        iface_up=wg_iface_up(),
+    )
+
+
+@app.route("/vpn/setup", methods=["POST"])
+@login_required
+@admin_required
+def vpn_setup():
+    config = load_wg_config()
+    if config.get("server", {}).get("private_key"):
+        flash("WireGuard is already initialized.", "info")
+        return redirect(url_for("vpn"))
+    priv, pub = wg_genkey()
+    config["server"] = {
+        "private_key": priv,
+        "public_key": pub,
+        "listen_port": 51820,
+        "address": WG_SERVER_ADDR,
+    }
+    config.setdefault("peers", [])
+    save_wg_config(config)
+    result = apply_wg(config)
+    if result.returncode == 0:
+        flash("WireGuard initialized and started.", "success")
+    else:
+        flash(f"Initialized but failed to start: {result.stderr}", "danger")
+    return redirect(url_for("vpn"))
+
+
+@app.route("/vpn/toggle", methods=["POST"])
+@login_required
+@admin_required
+def vpn_toggle():
+    if wg_iface_up():
+        subprocess.run(["wg-quick", "down", "wg0"], check=False)
+        flash("WireGuard stopped.", "info")
+    else:
+        config = load_wg_config()
+        result = apply_wg(config)
+        if result.returncode == 0:
+            flash("WireGuard started.", "success")
+        else:
+            flash(f"Failed to start: {result.stderr}", "danger")
+    return redirect(url_for("vpn"))
+
+
+@app.route("/vpn/add_peer", methods=["POST"])
+@login_required
+@admin_required
+def vpn_add_peer():
+    config = load_wg_config()
+    if not config.get("server", {}).get("private_key"):
+        flash("Initialize WireGuard server first.", "danger")
+        return redirect(url_for("vpn"))
+    name = request.form.get("name", "").strip()
+    public_key = request.form.get("public_key", "").strip()
+    allowed_ips = request.form.get("allowed_ips", "").strip()
+    comment = request.form.get("comment", "").strip()
+    if not name or not public_key or not allowed_ips:
+        flash("Name, public key, and allowed IPs are required.", "danger")
+        return redirect(url_for("vpn"))
+    config["peers"].append({
+        "name": name,
+        "public_key": public_key,
+        "allowed_ips": allowed_ips,
+        "comment": comment,
+    })
+    save_wg_config(config)
+    result = apply_wg(config)
+    if result.returncode == 0:
+        flash(f"Peer '{name}' added.", "success")
+    else:
+        flash(f"Peer saved but apply failed: {result.stderr}", "warning")
+    return redirect(url_for("vpn"))
+
+
+@app.route("/vpn/delete_peer", methods=["POST"])
+@login_required
+@admin_required
+def vpn_delete_peer():
+    idx = int(request.form["idx"])
+    config = load_wg_config()
+    peers = config.get("peers", [])
+    if 0 <= idx < len(peers):
+        removed = peers.pop(idx)
+        save_wg_config(config)
+        apply_wg(config)
+        flash(f"Peer '{removed['name']}' removed.", "success")
+    return redirect(url_for("vpn"))
+
+
+@app.route("/vpn/client_config/<int:idx>")
+@login_required
+def vpn_client_config(idx):
+    import re
+    config = load_wg_config()
+    server = config.get("server", {})
+    peers = config.get("peers", [])
+    if idx >= len(peers):
+        flash("Peer not found.", "danger")
+        return redirect(url_for("vpn"))
+    peer = peers[idx]
+    try:
+        wan_iface = next((k for k, v in INTERFACE_LABELS.items() if v == 'DMZ'), 'eth2')
+        wan_info = subprocess.check_output(["ip", "-4", "addr", "show", wan_iface], text=True)
+        match = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", wan_info)
+        endpoint = match.group(1) if match else "192.168.90.200"
+    except Exception:
+        endpoint = "192.168.90.200"
+    client_conf = (
+        f"# Client config for: {peer['name']}\n"
+        f"# Run 'wg genkey | tee privkey | wg pubkey > pubkey' to generate your keys,\n"
+        f"# then replace <your-private-key> below.\n\n"
+        f"[Interface]\n"
+        f"PrivateKey = <your-private-key>\n"
+        f"Address = {peer['allowed_ips'].split(',')[0].strip()}\n"
+        f"DNS = 192.168.95.200\n\n"
+        f"[Peer]\n"
+        f"PublicKey = {server['public_key']}\n"
+        f"Endpoint = {endpoint}:{server.get('listen_port', 51820)}\n"
+        f"AllowedIPs = 192.168.95.0/24, 192.168.90.0/24\n"
+        f"PersistentKeepalive = 25\n"
+    )
+    from flask import Response
+    return Response(
+        client_conf,
+        mimetype="text/plain",
+        headers={"Content-Disposition": f"attachment; filename=wg0-{peer['name']}.conf"},
+    )
+
+
+@app.route("/api/vpn/status")
+@login_required
+def api_vpn_status():
+    return jsonify({"up": wg_iface_up(), "peers": parse_wg_show()})
+
+
+# --- diagnostics routes ---
+
+_DIAG_TARGET_RE = re.compile(r'^[a-zA-Z0-9.\-_]{1,253}$')
+PCAP_PATH = "/tmp/diag_capture.pcap"
+
+
+@app.route("/diagnostics", methods=["GET", "POST"])
+@login_required
+def diagnostics():
+    output = None
+    tool = None
+    error = None
+    pcap_available = False
+
+    if request.method == "POST":
+        tool = request.form.get("tool")
+        lan_iface = next((k for k, v in INTERFACE_LABELS.items() if v == 'LAN'), 'eth1')
+        iface = request.form.get("iface", lan_iface)
+        target = request.form.get("target", "").strip()
+        bpf = request.form.get("bpf", "").strip()
+
+        try:
+            count_raw = int(request.form.get("count", "4"))
+            count = max(1, min(count_raw, 50))
+        except ValueError:
+            count = 4
+
+        if iface not in INTERFACE_LABELS:
+            error = "Invalid interface."
+        elif tool in ("ping", "traceroute") and not _DIAG_TARGET_RE.match(target):
+            error = "Invalid target — use a hostname or IP address."
+        else:
+            cmd = None
+            timeout = 30
+            if tool == "ping":
+                cmd = ["ping", "-c", str(count), "-W", "2", "-I", iface, target]
+            elif tool == "traceroute":
+                cmd = ["traceroute", "-i", iface, "-w", "2", target]
+                timeout = 60
+            elif tool == "tcpdump":
+                # remove stale file — tcpdump drops to 'tcpdump' user before
+                # opening the output file, so it can't overwrite a root-owned file
+                try:
+                    os.remove(PCAP_PATH)
+                except FileNotFoundError:
+                    pass
+                cap_cmd = ["tcpdump", "-i", iface, "-c", str(count), "-n",
+                           "--no-promiscuous-mode", "-w", PCAP_PATH]
+                if bpf:
+                    cap_cmd.append(bpf)
+                try:
+                    subprocess.run(cap_cmd, capture_output=True, timeout=30)
+                except subprocess.TimeoutExpired:
+                    pass  # partial pcap is still valid
+                if os.path.exists(PCAP_PATH) and os.path.getsize(PCAP_PATH) > 24:
+                    r2 = subprocess.run(["tcpdump", "-r", PCAP_PATH, "-n"],
+                                        capture_output=True, text=True, timeout=10)
+                    output = r2.stdout + r2.stderr
+                    pcap_available = True
+                else:
+                    output = "(no packets captured — interface may be idle)"
+            else:
+                error = "Unknown tool."
+
+            if cmd:
+                try:
+                    r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+                    output = r.stdout + r.stderr
+                except subprocess.TimeoutExpired as e:
+                    decode = lambda b: b.decode(errors="replace") if isinstance(b, bytes) else (b or "")
+                    output = decode(e.stdout) + decode(e.stderr) + "\n[timed out]"
+
+        if error:
+            flash(error, "danger")
+
+    return render_template(
+        "diagnostics.html",
+        active_page="diagnostics",
+        interfaces=INTERFACE_LABELS,
+        tool=tool,
+        output=output,
+        pcap_available=pcap_available,
+    )
+
+
+@app.route("/diagnostics/download_pcap")
+@login_required
+def download_pcap():
+    from flask import send_file
+    if not os.path.exists(PCAP_PATH) or os.path.getsize(PCAP_PATH) <= 24:
+        flash("No capture file available.", "danger")
+        return redirect(url_for("diagnostics"))
+    return send_file(
+        PCAP_PATH,
+        as_attachment=True,
+        download_name="capture.pcap",
+        mimetype="application/vnd.tcpdump.pcap",
+    )
+
+
+# --- arp monitoring routes ---
+
+@app.route("/arp")
+@login_required
+def arp():
+    try:
+        with open(ARPMON_STATE) as f:
+            devices = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        devices = {}
+
+    events = []
+    try:
+        with open(ARPMON_LOG) as f:
+            for line in f:
+                try:
+                    events.append(json.loads(line.strip()))
+                except json.JSONDecodeError:
+                    continue
+    except FileNotFoundError:
+        pass
+
+    return render_template(
+        "arp.html",
+        active_page="arp",
+        devices=devices,
+        events=events[-100:],
+    )
+
+
+# --- settings / user management routes ---
+
+@app.route("/settings/users")
+@login_required
+def settings_users():
+    return render_template("settings.html", active_page="settings",
+                           users=users, current_user=session["username"],
+                           current_role=session.get("role"))
+
+
+@app.route("/settings/change_password", methods=["POST"])
+@login_required
+def change_password():
+    current = request.form.get("current_password", "")
+    new = request.form.get("new_password", "").strip()
+    confirm = request.form.get("confirm_password", "").strip()
+    rec = next((u for u in users if u["username"] == session["username"]), None)
+    if not rec or not check_password_hash(rec["password_hash"], current):
+        flash("Current password is incorrect.", "danger")
+    elif new != confirm:
+        flash("New passwords do not match.", "danger")
+    elif len(new) < 6:
+        flash("Password must be at least 6 characters.", "danger")
+    else:
+        rec["password_hash"] = generate_password_hash(new)
+        save_config()
+        flash("Password updated.", "success")
+    return redirect(url_for("settings_users"))
+
+
+@app.route("/settings/add_user", methods=["POST"])
+@login_required
+@admin_required
+def add_user():
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "").strip()
+    role = request.form.get("role", "viewer")
+    if not username or not password:
+        flash("Username and password are required.", "danger")
+    elif any(u["username"] == username for u in users):
+        flash(f"User '{username}' already exists.", "danger")
+    elif role not in ("admin", "viewer"):
+        flash("Invalid role.", "danger")
+    else:
+        users.append({"username": username,
+                      "password_hash": generate_password_hash(password),
+                      "role": role})
+        save_config()
+        flash(f"User '{username}' added.", "success")
+    return redirect(url_for("settings_users"))
+
+
+@app.route("/settings/delete_user", methods=["POST"])
+@login_required
+@admin_required
+def delete_user():
+    global users
+    username = request.form.get("username", "")
+    if username == session["username"]:
+        flash("Cannot delete your own account.", "danger")
+    else:
+        users = [u for u in users if u["username"] != username]
+        save_config()
+        flash(f"User '{username}' deleted.", "success")
+    return redirect(url_for("settings_users"))
+
 
 load_config()
-proc = subprocess.run(
-    ["iptables-restore", "-n", FIREWALL_RULES_PATH],  # -n = don't flush counters
-)
+_apply_rules_now(pending_rules)
 
+_wg_startup = load_wg_config()
+if _wg_startup.get("server", {}).get("private_key"):
+    write_wg_conf(_wg_startup)
+    subprocess.run(["wg-quick", "down", "wg0"], capture_output=True)
+    subprocess.run(["wg-quick", "up", "wg0"], capture_output=True)
+    _ensure_wg_masquerade()
 
 app.run(host="0.0.0.0", port=5000)

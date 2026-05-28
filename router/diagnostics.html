@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Diagnostics</h2>
+
+<div class="row g-4 mb-4">
+
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header">Ping</div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('diagnostics') }}">
+          <input type="hidden" name="tool" value="ping">
+          <div class="mb-2">
+            <label class="form-label">Target</label>
+            <input type="text" name="target" class="form-control form-control-sm"
+                   placeholder="192.168.95.2" required>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Interface</label>
+            <select name="iface" class="form-select form-select-sm">
+              {% for k, v in interfaces.items() %}
+              <option value="{{ k }}">{{ v }} ({{ k }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Count</label>
+            <input type="number" name="count" class="form-control form-control-sm"
+                   value="4" min="1" max="50">
+          </div>
+          <button type="submit" class="btn btn-sm btn-primary w-100">Run Ping</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header">Traceroute</div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('diagnostics') }}">
+          <input type="hidden" name="tool" value="traceroute">
+          <div class="mb-2">
+            <label class="form-label">Target</label>
+            <input type="text" name="target" class="form-control form-control-sm"
+                   placeholder="8.8.8.8" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Interface</label>
+            <select name="iface" class="form-select form-select-sm">
+              {% for k, v in interfaces.items() %}
+              <option value="{{ k }}"{% if k == "eth2" %} selected{% endif %}>{{ v }} ({{ k }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-sm btn-primary w-100 mt-4">Run Traceroute</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header">Packet Capture</div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('diagnostics') }}">
+          <input type="hidden" name="tool" value="tcpdump">
+          <div class="mb-2">
+            <label class="form-label">Interface</label>
+            <select name="iface" class="form-select form-select-sm">
+              {% for k, v in interfaces.items() %}
+              <option value="{{ k }}">{{ v }} ({{ k }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">BPF Filter <span class="text-muted">(optional)</span></label>
+            <input type="text" name="bpf" class="form-control form-control-sm"
+                   placeholder="host 192.168.95.2 and port 502">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Packet Count</label>
+            <input type="number" name="count" class="form-control form-control-sm"
+                   value="20" min="1" max="50">
+          </div>
+          <button type="submit" class="btn btn-sm btn-primary w-100">Capture</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% if output is not none %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Output <span class="text-muted small ms-2">{{ tool }}</span></span>
+    {% if pcap_available %}
+    <a href="{{ url_for('download_pcap') }}" class="btn btn-sm btn-outline-primary">
+      Download PCAP
+    </a>
+    {% endif %}
+  </div>
+  <div class="card-body p-0">
+    <pre class="mb-0 p-3" style="font-size:0.8rem; max-height:500px; overflow-y:auto;">{{ output }}</pre>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

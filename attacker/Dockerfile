@@ -46,6 +46,10 @@ COPY default.xml /etc/xdg/xfce4/panel/default.xml
 
 COPY index.html /opt/noVNC/index.html
 
+COPY sword.svg /opt/noVNC/sword.svg
+RUN sed -i '/<link rel="icon"/d' /opt/noVNC/vnc.html && \
+    sed -i 's|<title>[^<]*</title>|<title>Attacker Workstation</title>|' /opt/noVNC/vnc.html && \
+    sed -i 's|</head>|<link rel="icon" type="image/svg+xml" href="sword.svg"></head>|' /opt/noVNC/vnc.html
 
 # Entrypoint script that sets password and starts the desktop session
 COPY start.sh /usr/local/bin/start.sh

@@ -15,10 +15,14 @@ services:
       test: ["CMD", "nc", "-z", "localhost", "55555"]
       interval: 5s
       retries: 5
+    dns:
+      - 192.168.95.200
     networks:
-      a-grfics-admin:  # gets random bridge IP (e.g., 172.18.x.x)
+      a-grfics-admin:
+        priority: 10
       b-ics-net:
         ipv4_address: 192.168.95.45
+        priority: 100
 
     # Optional if you want to override default CMD
     # command: sh -c "./simulation/simulation & cd modbus && ./run_all.sh"
@@ -32,10 +36,20 @@ services:
       - NET_ADMIN
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    dns:
+      - 192.168.95.200
     networks:
-      a-grfics-admin:  # gets random bridge IP (e.g., 172.18.x.x)
+      a-grfics-admin:
+        priority: 10
       b-ics-net:
         ipv4_address: 192.168.95.2
+        priority: 100
     volumes:
       - plc_volume:/docker_persistent
 
@@ -52,10 +66,20 @@ services:
       - NET_ADMIN
     ports:
       - "6080:6080"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:6080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    dns:
+      - 192.168.95.200
     networks:
-      a-grfics-admin:  # gets random bridge IP (e.g., 172.18.x.x)
+      a-grfics-admin:
+        priority: 10
       b-ics-net:
         ipv4_address: 192.168.95.5
+        priority: 100
 
     # Optional if you want to override default CMD
     # command: sh -c "./simulation/simulation & cd modbus && ./run_all.sh"
@@ -65,16 +89,23 @@ services:
     container_name: HMI
     build: ./scadalts
     dns:
-     - 8.8.8.8
-     - 1.1.1.1
+      - 192.168.90.200
     cap_add:
       - NET_ADMIN
     ports:
       - "6081:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     networks:
-      a-grfics-admin:  # gets random bridge IP (e.g., 172.18.x.x)
+      a-grfics-admin:
+        priority: 10
       c-dmz-net:
         ipv4_address: 192.168.90.107
+        priority: 100
     volumes:
       - scadalts_db:/var/lib/mysql
     # Optional if you want to override default CMD
@@ -89,10 +120,20 @@ services:
       - NET_ADMIN
     ports:
       - "6088:6080"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:6080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    dns:
+      - 192.168.90.200
     networks:
-      a-grfics-admin:  # gets random bridge IP (e.g., 172.18.x.x)
+      a-grfics-admin:
+        priority: 10
       c-dmz-net:
         ipv4_address: 192.168.90.6
+        priority: 100
     sysctls:
       net.ipv4.conf.default.arp_announce: 2
       net.ipv4.conf.all.arp_announce: 2
@@ -114,6 +155,8 @@ services:
       net.ipv4.ip_forward: '1'
     environment:
       - FWUI_SECRET_KEY=some-long-secret-you-generate
+    ports:
+     - "51820:51820/udp"
     volumes:
      - router_config:/etc/firewall
     networks:
@@ -131,10 +174,20 @@ services:
     restart: unless-stopped
     ports:
       - "8888:8888"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8888/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    dns:
+      - 192.168.90.200
     networks:
       a-grfics-admin:
+        priority: 10
       c-dmz-net:
         ipv4_address: 192.168.90.250
+        priority: 100
 
   wazuh:
     profiles: [siem]
@@ -153,10 +206,14 @@ services:
     volumes:
       - wazuh_manager_data:/var/ossec
       - wazuh_indexer_data:/var/lib/wazuh-indexer
+    dns:
+      - 192.168.90.200
     networks:
       a-grfics-admin:
+        priority: 10
       c-dmz-net:
         ipv4_address: 192.168.90.20
+        priority: 100
 
 networks:
   b-ics-net:

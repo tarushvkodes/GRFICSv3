@@ -1,0 +1,76 @@
+:root {
+  --fl-gold:       #D4A820;
+  --fl-gold-hover: #e8bf35;
+  --fl-dark:       #1a1a1a;
+}
+
+/* ── Navbar ───────────────────────────────────────── */
+.navbar {
+  background-color: var(--fl-dark) !important;
+  border-bottom: 3px solid var(--fl-gold);
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+}
+
+.navbar-brand img {
+  height: 28px;
+}
+
+.navbar .nav-link {
+  color: rgba(255, 255, 255, 0.72) !important;
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+}
+
+.navbar .nav-link:hover,
+.navbar .nav-link.active {
+  color: var(--fl-gold) !important;
+}
+
+.navbar .navbar-text {
+  color: rgba(255, 255, 255, 0.5) !important;
+  font-size: 0.8rem;
+}
+
+/* ── Primary buttons → gold ───────────────────────── */
+.btn-primary {
+  background-color: var(--fl-gold);
+  border-color:     var(--fl-gold);
+  color: #111;
+  font-weight: 500;
+}
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active,
+.btn-primary.active {
+  background-color: var(--fl-gold-hover);
+  border-color:     var(--fl-gold-hover);
+  color: #111;
+}
+
+/* Logout button in navbar */
+.btn-outline-light {
+  color:        var(--fl-gold);
+  border-color: var(--fl-gold);
+}
+.btn-outline-light:hover {
+  background-color: var(--fl-gold);
+  border-color:     var(--fl-gold);
+  color: #111;
+}
+
+/* ── Dark table headers ───────────────────────────── */
+.table-dark {
+  --bs-table-bg: var(--fl-dark);
+}
+
+/* ── Login page ───────────────────────────────────── */
+.fl-login-logo {
+  display: block;
+  max-width: 260px;
+  margin: 0 auto 1.5rem;
+}
+
+.fl-login-card {
+  border-top: 4px solid var(--fl-gold);
+}

@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block content %}
+{% set ns = namespace(lan_iface='eth1', dmz_iface='eth2') %}
+{% for k, v in labels.items() %}{% if v == 'LAN' %}{% set ns.lan_iface = k %}{% endif %}{% if v == 'DMZ' %}{% set ns.dmz_iface = k %}{% endif %}{% endfor %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0">Dashboard</h2>
+  <span class="text-muted small">Updated <span id="last-updated">—</span></span>
+</div>
+
+<!-- Summary cards -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card h-100 border-primary">
+      <div class="card-body text-center">
+        <p class="text-muted mb-1 small">Active Connections</p>
+        <h2 class="mb-0" id="conn-count">—</h2>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-body text-center">
+        <p class="text-muted mb-1 small">LAN ({{ ns.lan_iface }})</p>
+        <div class="d-flex justify-content-around">
+          <div><span class="text-success small">↓ RX</span><br><strong id="lan-rx">—</strong></div>
+          <div><span class="text-danger small">↑ TX</span><br><strong id="lan-tx">—</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-body text-center">
+        <p class="text-muted mb-1 small">DMZ ({{ ns.dmz_iface }})</p>
+        <div class="d-flex justify-content-around">
+          <div><span class="text-success small">↓ RX</span><br><strong id="wan-rx">—</strong></div>
+          <div><span class="text-danger small">↑ TX</span><br><strong id="wan-tx">—</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Interface traffic table -->
+<h5>Interface Traffic</h5>
+<table class="table table-bordered table-sm align-middle mb-4">
+  <thead class="table-dark">
+    <tr>
+      <th>Interface</th>
+      <th>Zone</th>
+      <th class="text-end">RX (bytes/s)</th>
+      <th class="text-end">RX (pps)</th>
+      <th class="text-end">TX (bytes/s)</th>
+      <th class="text-end">TX (pps)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for iface, label in labels.items() %}
+    <tr id="iface-row-{{ iface }}">
+      <td><code>{{ iface }}</code></td>
+      <td>{{ label }}</td>
+      <td class="text-end font-monospace iface-rx-bps">—</td>
+      <td class="text-end font-monospace iface-rx-pps">—</td>
+      <td class="text-end font-monospace iface-tx-bps">—</td>
+      <td class="text-end font-monospace iface-tx-pps">—</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Top talkers -->
+<h5>Top Talkers <span class="text-muted fw-normal fs-6">by connection count</span></h5>
+<table class="table table-bordered table-sm align-middle">
+  <thead class="table-dark">
+    <tr><th>#</th><th>Source IP</th><th>Zone</th><th class="text-end">Connections</th></tr>
+  </thead>
+  <tbody id="top-talkers">
+    <tr><td colspan="4" class="text-center text-muted">Loading...</td></tr>
+  </tbody>
+</table>
+
+<script>
+function fmtBytes(bps) {
+  if (bps < 1024)       return bps.toFixed(0) + ' B/s';
+  if (bps < 1048576)    return (bps / 1024).toFixed(1) + ' KB/s';
+  return (bps / 1048576).toFixed(2) + ' MB/s';
+}
+
+function fmtPps(pps) {
+  return pps.toFixed(1) + ' pps';
+}
+
+function ipZone(ip) {
+  if (ip.startsWith('192.168.95.')) return '<span class="badge bg-success">LAN</span>';
+  if (ip.startsWith('192.168.90.')) return '<span class="badge bg-warning text-dark">DMZ</span>';
+  if (ip.startsWith('172.'))        return '<span class="badge bg-secondary">Admin</span>';
+  return '<span class="badge bg-light text-dark border">Unknown</span>';
+}
+
+function refreshStats() {
+  fetch('/api/stats')
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('conn-count').textContent = data.connection_count;
+
+      const ifaces = data.interfaces || {};
+
+      // Summary cards
+      const lan = ifaces[{{ ns.lan_iface | tojson }}] || {};
+      const wan = ifaces[{{ ns.dmz_iface | tojson }}] || {};
+      document.getElementById('lan-rx').textContent = fmtBytes(lan.rx_bps || 0);
+      document.getElementById('lan-tx').textContent = fmtBytes(lan.tx_bps || 0);
+      document.getElementById('wan-rx').textContent = fmtBytes(wan.rx_bps || 0);
+      document.getElementById('wan-tx').textContent = fmtBytes(wan.tx_bps || 0);
+
+      // Interface rows
+      for (const [iface, stats] of Object.entries(ifaces)) {
+        const row = document.getElementById('iface-row-' + iface);
+        if (!row) continue;
+        row.querySelector('.iface-rx-bps').textContent = fmtBytes(stats.rx_bps);
+        row.querySelector('.iface-rx-pps').textContent = fmtPps(stats.rx_pps);
+        row.querySelector('.iface-tx-bps').textContent = fmtBytes(stats.tx_bps);
+        row.querySelector('.iface-tx-pps').textContent = fmtPps(stats.tx_pps);
+      }
+
+      // Top talkers
+      const tbody = document.getElementById('top-talkers');
+      if (!data.top_talkers || data.top_talkers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No active connections</td></tr>';
+      } else {
+        tbody.innerHTML = data.top_talkers.map((t, i) =>
+          `<tr>
+            <td class="text-muted">${i + 1}</td>
+            <td><code>${t.ip}</code></td>
+            <td>${ipZone(t.ip)}</td>
+            <td class="text-end">${t.connections}</td>
+          </tr>`
+        ).join('');
+      }
+
+      const now = new Date();
+      document.getElementById('last-updated').textContent =
+        now.toLocaleTimeString();
+    })
+    .catch(() => {
+      document.getElementById('last-updated').textContent = 'error';
+    });
+}
+
+refreshStats();
+setInterval(refreshStats, 2000);
+</script>
+{% endblock %}

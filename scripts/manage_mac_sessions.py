@@ -560,7 +560,7 @@ def print_urls(count: int) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run isolated GRFICSv3 sessions on one Mac.")
     parser.add_argument("action", choices=["start", "stop", "status", "config", "urls"])
-    parser.add_argument("--sessions", type=int, default=2, help="Number of sessions to manage.")
+    parser.add_argument("--sessions", type=int, default=1, help="Number of sessions to manage.")
     parser.add_argument("--cpu", type=int, default=8, help="Colima CPU count for multi-session use.")
     parser.add_argument("--memory", type=int, default=16, help="Colima memory in GB for multi-session use.")
     parser.add_argument("--skip-build", action="store_true", help="Skip rebuilding local session-aware images.")

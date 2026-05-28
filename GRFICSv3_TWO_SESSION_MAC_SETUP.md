@@ -22,8 +22,10 @@ The session manager starts Colima with those values if Docker is not already ava
 From the repo root:
 
 ```bash
-python3 scripts/manage_mac_sessions.py start
+python3 scripts/manage_mac_sessions.py start --sessions 2
 ```
+
+Two sessions are optional. Running the manager without `--sessions 2` starts one session only.
 
 The first run rebuilds the session-aware images for:
 
@@ -44,7 +46,7 @@ git lfs pull
 Later starts can skip rebuilds:
 
 ```bash
-python3 scripts/manage_mac_sessions.py start --skip-build
+python3 scripts/manage_mac_sessions.py start --sessions 2 --skip-build
 ```
 
 ## URL Layout
@@ -119,25 +121,25 @@ Feed 1 in session 2 is:
 ## Status
 
 ```bash
-python3 scripts/manage_mac_sessions.py status
+python3 scripts/manage_mac_sessions.py status --sessions 2
 ```
 
 ## Print URLs
 
 ```bash
-python3 scripts/manage_mac_sessions.py urls
+python3 scripts/manage_mac_sessions.py urls --sessions 2
 ```
 
 ## Validate Compose Files
 
 ```bash
-python3 scripts/manage_mac_sessions.py config
+python3 scripts/manage_mac_sessions.py config --sessions 2
 ```
 
 ## Stop Both Sessions
 
 ```bash
-python3 scripts/manage_mac_sessions.py stop
+python3 scripts/manage_mac_sessions.py stop --sessions 2
 ```
 
 ## Notes for Students

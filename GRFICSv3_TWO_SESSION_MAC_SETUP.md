@@ -63,11 +63,11 @@ Session 1 keeps the normal ports:
 | Caldera | `http://localhost:8888` |
 | Wazuh | `http://localhost:5601` |
 
-Session 2 uses a `+10000` port offset:
+Session 2 uses separate high ports. The simulation uses `12080` because Chromium-based browsers block `10080`.
 
 | View | URL on Mac |
 | --- | --- |
-| Simulation | `http://localhost:10080` |
+| Simulation | `http://localhost:12080` |
 | Kali | `http://localhost:16088` |
 | Engineering Workstation | `http://localhost:16080` |
 | HMI | `http://localhost:16081` |
@@ -151,7 +151,7 @@ For a class setup, assign each team a full session:
 | Team | Simulation | Kali | Wazuh |
 | --- | --- | --- | --- |
 | Team 1 | `http://MAC_IP` | `http://MAC_IP:6088` | `http://MAC_IP:5601` |
-| Team 2 | `http://MAC_IP:10080` | `http://MAC_IP:16088` | `http://MAC_IP:15601` |
+| Team 2 | `http://MAC_IP:12080` | `http://MAC_IP:16088` | `http://MAC_IP:15601` |
 
 ## Security Note
 

@@ -49,6 +49,14 @@ else
   echo "[*] Skipping project seed (views table already has entries)."
 fi
 
-ip route add 192.168.95.0/24 via 192.168.90.200 || true
+ICS_SUBNET="${ICS_SUBNET:-192.168.95.0/24}"
+ROUTER_DMZ_IP="${ROUTER_DMZ_IP:-192.168.90.200}"
+ICS_PREFIX="${ICS_PREFIX:-192.168.95}"
+
+if [ -n "$ICS_PREFIX" ] && [ "$ICS_PREFIX" != "192.168.95" ]; then
+  mariadb -uscada -pscada scadalts -e "UPDATE dataSources SET data = REPLACE(data, '192.168.95.2', '${ICS_PREFIX}.2');" || true
+fi
+
+ip route add "$ICS_SUBNET" via "$ROUTER_DMZ_IP" || true
 
 exit 0

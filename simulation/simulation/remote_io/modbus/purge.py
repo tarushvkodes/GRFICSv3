@@ -25,4 +25,4 @@ async def handlepurge(context, reader, writer, interval):
 
 
 if __name__ == "__main__":
-    asyncio.run(modbusdevice.run_device("Purge", "192.168.95.12", handlepurge))
+    asyncio.run(modbusdevice.run_device("Purge", modbusdevice.device_ip(12), handlepurge))

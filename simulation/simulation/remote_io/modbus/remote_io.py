@@ -11,6 +11,7 @@ of nodes which can be helpful for testing monitoring software.
 
 
 # --------------------------------------------------------------------------- # 
+import os
 # import the various server implementations
 # --------------------------------------------------------------------------- # 
 from pymodbus.server.async import StartTcpServer
@@ -58,7 +59,8 @@ def run_async_server():
     # run the server you want
     # ----------------------------------------------------------------------- # 
     
-    StartTcpServer(context_feed1, identity=identity_feed1, address=("192.168.95.10", 502))
+    ics_prefix = os.environ.get("ICS_PREFIX", "192.168.95")
+    StartTcpServer(context_feed1, identity=identity_feed1, address=(f"{ics_prefix}.10", 502))
 
 
 if __name__ == "__main__":

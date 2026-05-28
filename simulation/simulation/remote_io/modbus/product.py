@@ -26,4 +26,4 @@ async def handleproduct(context, reader, writer, interval):
 
 
 if __name__ == "__main__":
-    asyncio.run(modbusdevice.run_device("Product", "192.168.95.13", handleproduct))
+    asyncio.run(modbusdevice.run_device("Product", modbusdevice.device_ip(13), handleproduct))

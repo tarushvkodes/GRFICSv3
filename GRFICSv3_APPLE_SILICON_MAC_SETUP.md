@@ -91,8 +91,10 @@ python3 scripts/setup_apple_silicon_mac.py --stop --stop-colima
 If you prefer to run everything manually:
 
 ```bash
-brew install docker docker-compose colima
+brew install docker docker-compose colima git-lfs
 mkdir -p ~/.docker
+git lfs install
+git lfs pull
 ```
 
 Create or update `~/.docker/config.json` so it includes:
@@ -188,4 +190,3 @@ docker exec wazuh /var/ossec/bin/agent_control -l
 ## Security Note
 
 Do not expose these ports directly to the public internet. This lab includes attacker tooling, default credentials, PLC/HMI interfaces, Caldera, and Wazuh. For remote access outside your LAN, use a private overlay network such as Tailscale and use the Mac's private Tailscale IP with the same ports.
-

@@ -285,7 +285,7 @@ def main() -> int:
 
     ensure_xcode_tools()
     ensure_homebrew(args.install_homebrew)
-    brew_install(["docker", "docker-compose", "colima"], args.skip_install)
+    brew_install(["docker", "docker-compose", "colima", "git-lfs"], args.skip_install)
     configure_docker_cli_plugin()
     start_colima(args.cpu, args.memory, restart_if_needed=True)
 
@@ -304,4 +304,3 @@ if __name__ == "__main__":
     except subprocess.CalledProcessError as exc:
         print(f"\nCommand failed with exit code {exc.returncode}: {' '.join(exc.cmd)}")
         raise SystemExit(exc.returncode)
-

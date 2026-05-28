@@ -13,6 +13,7 @@ Start here:
 
 - [Running lab playbook: Kali, Caldera, Wazuh, IDS, and Modbus commands](GRFICSv3_RUNNING_LAB_PLAYBOOK.md)
 - [Apple Silicon Mac setup script and guide](GRFICSv3_APPLE_SILICON_MAC_SETUP.md)
+- [Two-session Apple Silicon Mac setup](GRFICSv3_TWO_SESSION_MAC_SETUP.md)
 - [Student lab worksheet / guided notes](GRFICSv3_LAB_WORKSHEET.md)
 - [Visual step-by-step guide](GRFICSv3_VISUAL_STEP_BY_STEP_GUIDE.md)
 - [Remote browser access notes](GRFICSv3_REMOTE_ACCESS.md)

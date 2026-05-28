@@ -335,7 +335,7 @@
 
   function openTool(name) {
     const host = window.location.hostname;
-    const endpoints = toolEndpoints[host] || toolEndpoints["localhost"];
+    const endpoints = toolEndpoints[host] || externalToolEndpoints();
     const url = endpoints[name];
 
     if (!url) {
@@ -348,8 +348,20 @@
 
   function getToolUrl(name) {
     const host = window.location.hostname;
-    const endpoints = toolEndpoints[host] || toolEndpoints["localhost"];
+    const endpoints = toolEndpoints[host] || externalToolEndpoints();
     return endpoints[name] || null;
+  }
+
+  function externalToolEndpoints() {
+    const host = window.location.hostname || "localhost";
+    const port = Number(window.location.port || "80");
+    const offset = port >= 10080 ? port - 80 : 0;
+    return {
+      attacker: `http://${host}:${6088 + offset}/`,
+      defender: `http://${host}:${6080 + offset}/`,
+      caldera:  `http://${host}:${8888 + offset}/`,
+      wazuh:    `http://${host}:${5601 + offset}/`
+    };
   }
 
   function setStatus(text, color) {

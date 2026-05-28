@@ -19,7 +19,9 @@ fi
 export DISPLAY=${DISPLAY:-:1}
 export RESOLUTION=${RESOLUTION:-1280x720}
 
-route add -net 192.168.95.0/24 gw 192.168.90.200
+ICS_SUBNET="${ICS_SUBNET:-192.168.95.0/24}"
+ROUTER_DMZ_IP="${ROUTER_DMZ_IP:-192.168.90.200}"
+route add -net "$ICS_SUBNET" gw "$ROUTER_DMZ_IP" || true
 
 # Start supervisord (the default CMD will run supervisord, but start.sh can exec it)
 exec "$@"

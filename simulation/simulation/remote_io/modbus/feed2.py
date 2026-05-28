@@ -26,4 +26,4 @@ async def handlefeed2(context, reader, writer, interval):
 
 
 if __name__ == "__main__":
-    asyncio.run(modbusdevice.run_device("Feed 2", "192.168.95.11", handlefeed2))
+    asyncio.run(modbusdevice.run_device("Feed 2", modbusdevice.device_ip(11), handlefeed2))

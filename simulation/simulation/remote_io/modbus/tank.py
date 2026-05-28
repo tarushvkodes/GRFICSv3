@@ -18,4 +18,4 @@ async def handletank(context, reader, writer, interval):
         await asyncio.sleep(interval)
 
 if __name__ == "__main__":
-    asyncio.run(modbusdevice.run_device("Reactor", "192.168.95.14", handletank))
+    asyncio.run(modbusdevice.run_device("Reactor", modbusdevice.device_ip(14), handletank))

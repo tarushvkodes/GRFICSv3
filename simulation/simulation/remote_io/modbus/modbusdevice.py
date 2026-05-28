@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import socket
 from pymodbus.server import StartAsyncTcpServer
 from pymodbus.device import ModbusDeviceIdentification
@@ -7,6 +8,9 @@ from pymodbus.datastore import ModbusSequentialDataBlock, ModbusServerContext, M
 
 def clamp_value(value):
     return max(0, min(65535, value))
+
+def device_ip(last_octet):
+    return f"{os.environ.get('ICS_PREFIX', '192.168.95')}.{last_octet}"
 
 async def write_with_timeout(writer, data, timeout):
     try:

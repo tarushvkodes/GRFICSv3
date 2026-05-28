@@ -1,12 +1,26 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 import subprocess
 import json, os, functools, time, glob, re
+from ipaddress import ip_address, ip_network
 from werkzeug.security import generate_password_hash, check_password_hash
 from collections import Counter
 from pathlib import Path
 from datetime import datetime
 
 app = Flask(__name__)
+
+ICS_SUBNET = os.environ.get("ICS_SUBNET", "192.168.95.0/24")
+DMZ_SUBNET = os.environ.get("DMZ_SUBNET", "192.168.90.0/24")
+ICS_PREFIX = os.environ.get("ICS_PREFIX", "192.168.95")
+DMZ_PREFIX = os.environ.get("DMZ_PREFIX", "192.168.90")
+ROUTER_ICS_IP = os.environ.get("ROUTER_ICS_IP", f"{ICS_PREFIX}.200")
+ROUTER_DMZ_IP = os.environ.get("ROUTER_DMZ_IP", f"{DMZ_PREFIX}.200")
+
+def _ip_in_subnet(ip, subnet):
+    try:
+        return ip_address(ip) in ip_network(subnet, strict=False)
+    except ValueError:
+        return False
 
 def _detect_interface_labels():
     _FALLBACK = {"eth0": "Admin", "eth1": "LAN", "eth2": "DMZ"}
@@ -30,9 +44,9 @@ def _detect_interface_labels():
         if iface in ('lo', 'wg0'):
             continue
         for ip in ips:
-            if ip.startswith('192.168.95.'):
+            if _ip_in_subnet(ip, ICS_SUBNET):
                 labels[iface] = 'LAN'
-            elif ip.startswith('192.168.90.'):
+            elif _ip_in_subnet(ip, DMZ_SUBNET):
                 labels[iface] = 'DMZ'
             else:
                 labels.setdefault(iface, 'Admin')
@@ -55,7 +69,6 @@ FIREWALL_RULES_PATH = "/etc/firewall/rules"
 CONFIG_PATH = "/etc/firewall/config.json"
 IDS_ALERTS_FILE = "/etc/suricata/alerts.json"
 IDS_RULES_FILE = "/etc/suricata/rules/local.rules"
-ICS_SUBNET = "192.168.95.0/24"   # trusted LAN — default allow outbound
 
 ARPMON_STATE = "/var/lib/arpmon/state.json"
 ARPMON_LOG   = "/var/log/arpmon/events.json"
@@ -984,9 +997,9 @@ def vpn_client_config(idx):
         wan_iface = next((k for k, v in INTERFACE_LABELS.items() if v == 'DMZ'), 'eth2')
         wan_info = subprocess.check_output(["ip", "-4", "addr", "show", wan_iface], text=True)
         match = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", wan_info)
-        endpoint = match.group(1) if match else "192.168.90.200"
+        endpoint = match.group(1) if match else ROUTER_DMZ_IP
     except Exception:
-        endpoint = "192.168.90.200"
+        endpoint = ROUTER_DMZ_IP
     client_conf = (
         f"# Client config for: {peer['name']}\n"
         f"# Run 'wg genkey | tee privkey | wg pubkey > pubkey' to generate your keys,\n"
@@ -994,11 +1007,11 @@ def vpn_client_config(idx):
         f"[Interface]\n"
         f"PrivateKey = <your-private-key>\n"
         f"Address = {peer['allowed_ips'].split(',')[0].strip()}\n"
-        f"DNS = 192.168.95.200\n\n"
+        f"DNS = {ROUTER_ICS_IP}\n\n"
         f"[Peer]\n"
         f"PublicKey = {server['public_key']}\n"
         f"Endpoint = {endpoint}:{server.get('listen_port', 51820)}\n"
-        f"AllowedIPs = 192.168.95.0/24, 192.168.90.0/24\n"
+        f"AllowedIPs = {ICS_SUBNET}, {DMZ_SUBNET}\n"
         f"PersistentKeepalive = 25\n"
     )
     from flask import Response

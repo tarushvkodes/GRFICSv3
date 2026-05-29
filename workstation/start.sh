@@ -18,6 +18,29 @@ if [ -f /var/ossec/etc/ossec.conf ]; then
   sed -i "s|<address>.*</address>|<address>${WAZUH_MANAGER_IP}</address>|" /var/ossec/etc/ossec.conf || true
 fi
 
+python3 <<'PY'
+import sqlite3
+from pathlib import Path
+
+profile_root = Path("/home/engineer/.mozilla/firefox")
+for db_path in profile_root.glob("*/places.sqlite"):
+    try:
+        with sqlite3.connect(db_path) as con:
+            con.execute(
+                "UPDATE moz_places SET url = ?, rev_host = ? "
+                "WHERE url = ? OR url LIKE ?",
+                (
+                    "http://plc:8080/dashboard",
+                    "clp.:ptth",
+                    "http://192.168.95.2:8080/dashboard",
+                    "http://192.168.%.2:8080/dashboard",
+                ),
+            )
+    except sqlite3.Error as exc:
+        print(f"[EWS] Could not update Firefox bookmarks in {db_path}: {exc}")
+PY
+chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.mozilla || true
+
 if getent hosts wazuh >/dev/null 2>&1; then
     /var/ossec/bin/wazuh-control start || true
 else

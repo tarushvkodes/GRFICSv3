@@ -4,7 +4,9 @@ set -e
 FIRST_RUN_FLAG="/var/lib/wazuh-indexer/.initialized"
 
 echo "[wazuh] Adding route to ICS network..."
-ip route add 192.168.95.0/24 via 192.168.90.200 2>/dev/null || true
+ICS_SUBNET="${ICS_SUBNET:-192.168.95.0/24}"
+ROUTER_DMZ_IP="${ROUTER_DMZ_IP:-192.168.90.200}"
+ip route replace "$ICS_SUBNET" via "$ROUTER_DMZ_IP" 2>/dev/null || true
 
 echo "[wazuh] Starting wazuh-indexer..."
 su -s /bin/bash wazuh-indexer \

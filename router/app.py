@@ -550,7 +550,13 @@ def parse_iptables_rules():
 @app.route("/")
 @login_required
 def dashboard():
-    return render_template("dashboard.html", active_page="dashboard", labels=INTERFACE_LABELS)
+    return render_template(
+        "dashboard.html",
+        active_page="dashboard",
+        labels=INTERFACE_LABELS,
+        ics_prefix=ICS_PREFIX,
+        dmz_prefix=DMZ_PREFIX,
+    )
 
 
 @app.route("/api/stats")
@@ -591,7 +597,15 @@ def api_states():
 def firewall():
     global dirty
     user = session.get("username")
-    return render_template("firewall.html", rules=pending_rules, labels=INTERFACE_LABELS, dirty=dirty, user=user)
+    return render_template(
+        "firewall.html",
+        rules=pending_rules,
+        labels=INTERFACE_LABELS,
+        dirty=dirty,
+        user=user,
+        ics_subnet=ICS_SUBNET,
+        dmz_subnet=DMZ_SUBNET,
+    )
 
 
 @app.route("/delete", methods=["POST"])
@@ -805,7 +819,8 @@ def dns():
     return render_template("dns.html", active_page="dns",
                            hosts=config.get("hosts", []),
                            blocked=config.get("blocked", []),
-                           queries=queries)
+                           queries=queries,
+                           plc_ip=f"{ICS_PREFIX}.2")
 
 
 @app.route("/dns/add_host", methods=["POST"])
@@ -1107,6 +1122,7 @@ def diagnostics():
         "diagnostics.html",
         active_page="diagnostics",
         interfaces=INTERFACE_LABELS,
+        ics_prefix=ICS_PREFIX,
         tool=tool,
         output=output,
         pcap_available=pcap_available,

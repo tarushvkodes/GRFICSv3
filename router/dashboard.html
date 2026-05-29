@@ -91,8 +91,10 @@ function fmtPps(pps) {
 }
 
 function ipZone(ip) {
-  if (ip.startsWith('192.168.95.')) return '<span class="badge bg-success">LAN</span>';
-  if (ip.startsWith('192.168.90.')) return '<span class="badge bg-warning text-dark">DMZ</span>';
+  const lanPrefix = {{ (ics_prefix ~ ".") | tojson }};
+  const dmzPrefix = {{ (dmz_prefix ~ ".") | tojson }};
+  if (ip.startsWith(lanPrefix)) return '<span class="badge bg-success">LAN</span>';
+  if (ip.startsWith(dmzPrefix)) return '<span class="badge bg-warning text-dark">DMZ</span>';
   if (ip.startsWith('172.'))        return '<span class="badge bg-secondary">Admin</span>';
   return '<span class="badge bg-light text-dark border">Unknown</span>';
 }

@@ -34,6 +34,8 @@ BASE_PORTS = {
     "wireguard": 51820,
 }
 
+PORT_KEYS = tuple(BASE_PORTS)
+
 SERVICE_SUFFIXES = {
     "simulation": "simulation",
     "plc": "plc",
@@ -76,6 +78,25 @@ def port_for(index: int, key: str) -> int:
     if key == "wazuh_api":
         return 55000 + (((index - 1) % 2) * 10000) + ((index - 1) // 2)
     return BASE_PORTS[key] + ((index - 1) * 10000)
+
+
+def validate_session_ports(count: int) -> None:
+    seen: dict[int, str] = {}
+    errors: list[str] = []
+
+    for index in range(1, count + 1):
+        for key in PORT_KEYS:
+            port = port_for(index, key)
+            label = f"{session_name(index)} {key}"
+            if port < 1 or port > 65535:
+                errors.append(f"{label} maps to invalid port {port}")
+            elif port in seen:
+                errors.append(f"{label} collides with {seen[port]} on port {port}")
+            else:
+                seen[port] = label
+
+    if errors:
+        raise SystemExit("Invalid multi-session port plan:\n  " + "\n  ".join(errors))
 
 
 def network_values(index: int) -> dict[str, str]:
@@ -169,6 +190,9 @@ def generate_override(index: int) -> Path:
       b-ics-net:
         ipv4_address: {values['simulation']}
         priority: 100
+    volumes:
+      - {REPO_ROOT / "simulation" / "entrypoint.sh"}:/entrypoint.sh:ro
+      - {REPO_ROOT / "simulation" / "web_visualization" / "index.html"}:/var/www/html/index.html:ro
 
   plc:
     container_name: {name}_plc
@@ -223,6 +247,8 @@ def generate_override(index: int) -> Path:
       b-ics-net:
         ipv4_address: {values['ews']}
         priority: 100
+    volumes:
+      - {REPO_ROOT / "workstation" / "start.sh"}:/usr/local/bin/start.sh:ro
 
   hmi:
     container_name: {name}_HMI
@@ -249,6 +275,7 @@ def generate_override(index: int) -> Path:
         ipv4_address: {values['hmi']}
         priority: 100
     volumes:
+      - {REPO_ROOT / "scadalts" / "init.sh"}:/init.sh:ro
       - scadalts_db:/var/lib/mysql
 
   kali:
@@ -302,6 +329,11 @@ def generate_override(index: int) -> Path:
       - "{port_for(index, 'wireguard')}:51820/udp"
     volumes:
       - router_config:/etc/firewall
+      - {REPO_ROOT / "router" / "app.py"}:/opt/fwui/app.py:ro
+      - {REPO_ROOT / "router" / "dashboard.html"}:/opt/fwui/templates/dashboard.html:ro
+      - {REPO_ROOT / "router" / "firewall.html"}:/opt/fwui/templates/firewall.html:ro
+      - {REPO_ROOT / "router" / "dns.html"}:/opt/fwui/templates/dns.html:ro
+      - {REPO_ROOT / "router" / "diagnostics.html"}:/opt/fwui/templates/diagnostics.html:ro
     networks:
       a-grfics-admin:
       b-ics-net:
@@ -355,6 +387,7 @@ def generate_override(index: int) -> Path:
     cap_add:
       - NET_ADMIN
     volumes:
+      - {REPO_ROOT / "wazuh" / "entrypoint.sh"}:/entrypoint.sh:ro
       - wazuh_manager_data:/var/ossec
       - wazuh_indexer_data:/var/lib/wazuh-indexer
     networks:
@@ -578,6 +611,7 @@ def main() -> int:
     os.chdir(REPO_ROOT)
     if args.sessions < 1:
         raise SystemExit("--sessions must be at least 1")
+    validate_session_ports(args.sessions)
     if args.sessions > 2:
         log("WARNING: this Mac workflow is tuned for 2 sessions. More may be slow.")
 

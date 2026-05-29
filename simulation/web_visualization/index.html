@@ -324,18 +324,39 @@
       defender: "http://127.0.0.1:6080/",
       caldera:  "http://127.0.0.1:8888/",
       wazuh:    "http://127.0.0.1:5601/"
-    },
-    "192.168.95.45": {
-      attacker: "http://192.168.90.6:6080/",
-      defender: "http://192.168.95.5:6080/",
-      caldera:  "http://192.168.90.250:8888/",
-      wazuh:    "http://192.168.90.20:5601/"
     }
   };
 
+  function defaultHostEndpoints(host) {
+    const port = window.location.port;
+    if (port && port !== "80" && port !== "443") {
+      return null;
+    }
+    return toolEndpoints[host] || null;
+  }
+
+  function internalToolEndpoints(host) {
+    const match = /^192\.168\.(\d+)\.45$/.exec(host);
+    if (!match) return null;
+
+    const icsOctet = Number(match[1]);
+    if (!Number.isInteger(icsOctet) || icsOctet <= 5 || icsOctet > 254) {
+      return null;
+    }
+
+    const icsPrefix = `192.168.${icsOctet}`;
+    const dmzPrefix = `192.168.${icsOctet - 5}`;
+    return {
+      attacker: `http://${dmzPrefix}.6:6080/`,
+      defender: `http://${icsPrefix}.5:6080/`,
+      caldera:  `http://${dmzPrefix}.250:8888/`,
+      wazuh:    `http://${dmzPrefix}.20:5601/`
+    };
+  }
+
   function openTool(name) {
     const host = window.location.hostname;
-    const endpoints = toolEndpoints[host] || externalToolEndpoints();
+    const endpoints = defaultHostEndpoints(host) || internalToolEndpoints(host) || externalToolEndpoints();
     const url = endpoints[name];
 
     if (!url) {
@@ -348,7 +369,7 @@
 
   function getToolUrl(name) {
     const host = window.location.hostname;
-    const endpoints = toolEndpoints[host] || externalToolEndpoints();
+    const endpoints = defaultHostEndpoints(host) || internalToolEndpoints(host) || externalToolEndpoints();
     return endpoints[name] || null;
   }
 
@@ -368,6 +389,9 @@
       wazuh:    `http://${host}:${5601 + offset}/`
     };
   }
+
+  window.openTool = openTool;
+  window.getToolUrl = getToolUrl;
 
   function setStatus(text, color) {
     const label = document.getElementById("statusLabel");
@@ -523,6 +547,7 @@ const SIM_POLL_MS = 3000;
     // Tool indicators start calm
     setToolStatus("attacker", null, "Checking…");
     setToolStatus("defender", null, "Checking…");
+    setToolStatus("caldera",  null, "Checking…");
     setToolStatus("wazuh",    null, "Checking…");
     pollOnce();
 

@@ -71,6 +71,10 @@ def session_name(index: int) -> str:
 def port_for(index: int, key: str) -> int:
     if key == "simulation" and index > 1:
         return 12080 + ((index - 2) * 10000)
+    if key == "wireguard":
+        return 51820 + (((index - 1) % 2) * 10000) + ((index - 1) // 2)
+    if key == "wazuh_api":
+        return 55000 + (((index - 1) % 2) * 10000) + ((index - 1) // 2)
     return BASE_PORTS[key] + ((index - 1) * 10000)
 
 

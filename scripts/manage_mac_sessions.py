@@ -18,6 +18,7 @@ CALDERA_FACT_TARGET = (
     "/usr/src/app/plugins/modbus/data/sources/"
     "0033b644-a615-4eff-bcf3-178e9b17adc3.yml"
 )
+PLC_MBCONFIG = REPO_ROOT / "plc" / "mbconfig.cfg"
 UNITY_BUILD_DIR = REPO_ROOT / "simulation" / "web_visualization" / "Build"
 
 BASE_PORTS = {
@@ -126,6 +127,11 @@ def network_values(index: int) -> dict[str, str]:
         "ews": f"{ics_prefix}.5",
         "simulation": f"{ics_prefix}.45",
         "feed1": f"{ics_prefix}.10",
+        "feed2": f"{ics_prefix}.11",
+        "purge": f"{ics_prefix}.12",
+        "product": f"{ics_prefix}.13",
+        "tank": f"{ics_prefix}.14",
+        "analyzer": f"{ics_prefix}.15",
     }
 
 
@@ -156,10 +162,30 @@ def write_caldera_fact(index: int, values: dict[str, str]) -> Path:
     return fact_path
 
 
+def write_plc_mbconfig(index: int, values: dict[str, str]) -> Path:
+    session_path = SESSION_DIR / session_name(index) / "plc"
+    session_path.mkdir(parents=True, exist_ok=True)
+    config_path = session_path / PLC_MBCONFIG.name
+    replacements = {
+        "192.168.95.10": values["feed1"],
+        "192.168.95.11": values["feed2"],
+        "192.168.95.12": values["purge"],
+        "192.168.95.13": values["product"],
+        "192.168.95.14": values["tank"],
+        "192.168.95.15": values["analyzer"],
+    }
+    text = PLC_MBCONFIG.read_text()
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    config_path.write_text(text)
+    return config_path
+
+
 def generate_override(index: int) -> Path:
     name = session_name(index)
     values = network_values(index)
     fact_path = write_caldera_fact(index, values)
+    mbconfig_path = write_plc_mbconfig(index, values)
     session_path = SESSION_DIR / name
     session_path.mkdir(parents=True, exist_ok=True)
     compose_path = session_path / "docker-compose.yml"
@@ -221,6 +247,7 @@ def generate_override(index: int) -> Path:
         priority: 100
     volumes:
       - plc_volume:/docker_persistent
+      - {mbconfig_path}:/docker_persistent/mbconfig.cfg
 
   ews:
     container_name: {name}_EWS

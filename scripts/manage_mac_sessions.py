@@ -501,9 +501,95 @@ def compose_base(index: int) -> list[str]:
     ]
 
 
+def container_name(index: int, service: str) -> str:
+    return f"{session_name(index)}_{SERVICE_SUFFIXES[service]}"
+
+
+def docker_exec(index: int, service: str, script: str, *, check: bool = False) -> subprocess.CompletedProcess[str]:
+    return run(["docker", "exec", container_name(index, service), "sh", "-lc", script], check=check)
+
+
 def docker_available() -> bool:
     result = run(["docker", "info"], check=False, capture=True)
     return result.returncode == 0
+
+
+def flush_neighbor_tables(index: int) -> None:
+    for service in ("simulation", "plc", "ews", "hmi", "kali", "router"):
+        log(f"Clearing neighbor table in {container_name(index, service)}.")
+        docker_exec(
+            index,
+            service,
+            "ip neigh flush all 2>/dev/null || true; "
+            "arp -d -a 2>/dev/null || true; "
+            "ip -s neigh show 2>/dev/null || arp -n 2>/dev/null || true",
+        )
+
+
+def stop_spoofing_tools(index: int) -> None:
+    patterns = "arpspoof|bettercap|ettercap|mitmf|dsniff|netwox|scapy|python.*arp"
+    log(f"Stopping ARP/MITM tools in {container_name(index, 'kali')}.")
+    docker_exec(
+        index,
+        "kali",
+        f"pkill -f '{patterns}' 2>/dev/null || true; "
+        f"ps aux | grep -Ei '{patterns}' | grep -v grep || true",
+    )
+
+
+def restore_session_routes(index: int) -> None:
+    values = network_values(index)
+    commands = {
+        "hmi": f"ip route replace {values['ics_subnet']} via {values['router_dmz']} 2>/dev/null || "
+        f"route add -net {values['ics_subnet']} gw {values['router_dmz']} || true",
+        "kali": f"ip route replace {values['ics_subnet']} via {values['router_dmz']} 2>/dev/null || "
+        f"route add -net {values['ics_subnet']} gw {values['router_dmz']} || true",
+        "ews": f"ip route replace {values['dmz_subnet']} via {values['router_ics']} 2>/dev/null || "
+        f"route add -net {values['dmz_subnet']} gw {values['router_ics']} || true",
+        "simulation": f"ip route replace {values['dmz_subnet']} via {values['router_ics']} 2>/dev/null || "
+        f"route add -net {values['dmz_subnet']} gw {values['router_ics']} || true",
+        "plc": f"ip route replace {values['dmz_subnet']} via {values['router_ics']} 2>/dev/null || "
+        f"route add -net {values['dmz_subnet']} gw {values['router_ics']} || true",
+    }
+    for service, command in commands.items():
+        log(f"Restoring routes in {container_name(index, service)}.")
+        docker_exec(index, service, f"{command}; ip route show 2>/dev/null || route -n 2>/dev/null || true")
+
+
+def verify_session_modbus(index: int) -> None:
+    values = network_values(index)
+    hmi_check = (
+        f"for port in 502 8080; do "
+        f"if timeout 5 bash -c '</dev/tcp/{values['plc']}/'$port 2>/dev/null; then "
+        f"echo 'HMI -> PLC:'$port' ok'; "
+        f"else echo 'HMI -> PLC:'$port' fail'; fi; "
+        f"done"
+    )
+    plc_check = (
+        "for last in 10 11 12 13 14 15; do "
+        f"host={values['ics_prefix']}.$last; "
+        "if timeout 3 bash -c '</dev/tcp/'$host'/502' 2>/dev/null; then "
+        "echo \"$host:502 ok\"; "
+        "else echo \"$host:502 fail\"; fi; "
+        "done"
+    )
+    log("Checking HMI to PLC Modbus path.")
+    docker_exec(index, "hmi", hmi_check)
+    log("Checking PLC to simulated Modbus devices.")
+    docker_exec(index, "plc", plc_check)
+
+
+def reset_session_state(index: int) -> None:
+    generate_override(index)
+    stop_spoofing_tools(index)
+    flush_neighbor_tables(index)
+    restore_session_routes(index)
+    verify_session_modbus(index)
+    log(f"Restarting {container_name(index, 'hmi')} so Scada-LTS reconnects cleanly.")
+    run(compose_base(index) + ["restart", "hmi"], check=False)
+    time.sleep(20)
+    status_sessions_for([index])
+    verify_session_modbus(index)
 
 
 def colima_config_values() -> dict[str, int]:
@@ -616,6 +702,12 @@ def status_sessions(count: int) -> None:
         run(compose_base(index) + ["ps"], check=False)
 
 
+def status_sessions_for(indexes: list[int]) -> None:
+    for index in indexes:
+        print(f"\n=== {session_name(index)} ===")
+        run(compose_base(index) + ["ps"], check=False)
+
+
 def config_sessions(count: int) -> None:
     for index in range(1, count + 1):
         run(compose_base(index) + ["config"], check=True, capture=False)
@@ -650,8 +742,9 @@ def print_urls(count: int) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run isolated GRFICSv3 sessions on one Mac.")
-    parser.add_argument("action", choices=["start", "stop", "status", "config", "urls"])
+    parser.add_argument("action", choices=["start", "stop", "status", "config", "urls", "reset-state"])
     parser.add_argument("--sessions", type=int, default=1, help="Number of sessions to manage.")
+    parser.add_argument("--target-session", type=int, help="Single session to reset or inspect.")
     parser.add_argument("--cpu", type=int, default=8, help="Colima CPU count for multi-session use.")
     parser.add_argument("--memory", type=int, default=16, help="Colima memory in GB for multi-session use.")
     parser.add_argument("--skip-build", action="store_true", help="Skip rebuilding local session-aware images.")
@@ -664,6 +757,8 @@ def main() -> int:
     if args.sessions < 1:
         raise SystemExit("--sessions must be at least 1")
     validate_session_ports(args.sessions)
+    if args.target_session is not None and not 1 <= args.target_session <= args.sessions:
+        raise SystemExit("--target-session must be between 1 and --sessions")
     if args.sessions > 2:
         log("WARNING: this Mac workflow is tuned for 2 sessions. More may be slow.")
 
@@ -679,6 +774,10 @@ def main() -> int:
         for index in range(1, args.sessions + 1):
             generate_override(index)
         print_urls(args.sessions)
+    elif args.action == "reset-state":
+        if args.target_session is None:
+            raise SystemExit("reset-state requires --target-session, e.g. --target-session 4")
+        reset_session_state(args.target_session)
     return 0
 
 

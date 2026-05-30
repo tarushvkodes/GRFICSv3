@@ -315,12 +315,14 @@
   const toolEndpoints = {
     "localhost": {
       attacker: "http://localhost:6088/",
+      scada:    "http://localhost:6081/",
       plc:      "http://localhost:8080/dashboard",
       caldera:  "http://localhost:8888/",
       wazuh:    "http://localhost:5601/"
     },
     "127.0.0.1": {
       attacker: "http://127.0.0.1:6088/",
+      scada:    "http://127.0.0.1:6081/",
       plc:      "http://127.0.0.1:8080/dashboard",
       caldera:  "http://127.0.0.1:8888/",
       wazuh:    "http://127.0.0.1:5601/"
@@ -348,6 +350,7 @@
     const dmzPrefix = `192.168.${icsOctet - 5}`;
     return {
       attacker: `http://${dmzPrefix}.6:6080/`,
+      scada:    `http://${dmzPrefix}.107:8080/`,
       plc:      `http://${icsPrefix}.2:8080/dashboard`,
       caldera:  `http://${dmzPrefix}.250:8888/`,
       wazuh:    `http://${dmzPrefix}.20:5601/`
@@ -384,6 +387,7 @@
     }
     return {
       attacker: `http://${host}:${6088 + offset}/`,
+      scada:    `http://${host}:${6081 + offset}/`,
       plc:      `http://${host}:${8080 + offset}/dashboard`,
       caldera:  `http://${host}:${8888 + offset}/`,
       wazuh:    `http://${host}:${5601 + offset}/`
@@ -409,6 +413,7 @@
 
   const toolState = {
     attacker: { current: null, okStreak: 0, failStreak: 0 },
+    scada:    { current: null, okStreak: 0, failStreak: 0 },
     plc:      { current: null, okStreak: 0, failStreak: 0 },
     caldera:  { current: null, okStreak: 0, failStreak: 0 },
     wazuh:    { current: null, okStreak: 0, failStreak: 0 },
@@ -486,14 +491,16 @@
   }
 
   async function pollOnce() {
-    const [attOk, defOk, calOk, wazOk] = await Promise.all([
+    const [attOk, scadaOk, defOk, calOk, wazOk] = await Promise.all([
       checkTool("attacker"),
+      checkTool("scada"),
       checkTool("plc"),
       checkTool("caldera"),
       checkTool("wazuh"),
     ]);
 
     applyStabilizedResult("attacker", attOk);
+    applyStabilizedResult("scada",    scadaOk);
     applyStabilizedResult("plc",      defOk);
     applyStabilizedResult("caldera",  calOk);
     applyStabilizedResult("wazuh",    wazOk);
@@ -546,6 +553,7 @@ const SIM_POLL_MS = 3000;
   window.addEventListener("load", function () {
     // Tool indicators start calm
     setToolStatus("attacker", null, "Checking…");
+    setToolStatus("scada",    null, "Checking…");
     setToolStatus("plc",      null, "Checking…");
     setToolStatus("caldera",  null, "Checking…");
     setToolStatus("wazuh",    null, "Checking…");
@@ -596,6 +604,19 @@ const SIM_POLL_MS = 3000;
               <span class="tool-status">
                 <span id="attackerDot" class="tool-dot"></span>
                 <span id="attackerText" class="tool-status-text">Checking…</span>
+              </span>
+            </div>
+          </div>
+        </button>
+
+        <button class="btn" onclick="openTool('scada')">
+          <div class="icon">SC</div>
+          <div class="meta">
+            <div class="label">SCADA HMI</div>
+            <div class="hint">
+              <span class="tool-status">
+                <span id="scadaDot" class="tool-dot"></span>
+                <span id="scadaText" class="tool-status-text">Checking…</span>
               </span>
             </div>
           </div>
@@ -661,6 +682,7 @@ const SIM_POLL_MS = 3000;
           <div class="title">Chemical Plant Simulation</div>
           <div class="actions">
             <button class="small-btn" onclick="openTool('attacker')">Attacker</button>
+            <button class="small-btn" onclick="openTool('scada')">SCADA</button>
             <button class="small-btn" onclick="openTool('plc')">OpenPLC</button>
             <button class="small-btn" onclick="openTool('wazuh')">Wazuh</button>
             <button class="small-btn" onclick="unityInstance && unityInstance.SetFullscreen(1)">Fullscreen</button>

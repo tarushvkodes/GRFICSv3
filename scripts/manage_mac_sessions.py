@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import time
@@ -427,6 +428,12 @@ def generate_override(index: int) -> Path:
     image: fortiphyd/grfics-wazuh
     build: {REPO_ROOT / "wazuh"}
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:5601/"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 180s
     ports:
       - "{port_for(index, 'wazuh_agent_enroll')}:1514"
       - "{port_for(index, 'wazuh_agent_comm')}:1515"
@@ -487,18 +494,19 @@ volumes:
     return compose_path
 
 
-def compose_base(index: int) -> list[str]:
+def compose_base(index: int, *, with_siem: bool = True) -> list[str]:
     compose_file = generate_override(index)
-    return [
+    command = [
         "docker",
         "compose",
         "-p",
         session_name(index),
         "-f",
         str(compose_file),
-        "--profile",
-        "siem",
     ]
+    if with_siem:
+        command += ["--profile", "siem"]
+    return command
 
 
 def container_name(index: int, service: str) -> str:
@@ -592,6 +600,56 @@ def reset_session_state(index: int) -> None:
     verify_session_modbus(index)
 
 
+def docker_volume_exists(name: str) -> bool:
+    result = run(["docker", "volume", "inspect", name], check=False, capture=True)
+    return result.returncode == 0
+
+
+def reset_wazuh_state(index: int) -> None:
+    generate_override(index)
+    name = session_name(index)
+    log(f"Stopping and removing Wazuh for {name}.")
+    run(compose_base(index) + ["rm", "-sf", "wazuh"], check=False)
+    for suffix in ("wazuh_manager_data", "wazuh_indexer_data"):
+        volume = f"{name}_{suffix}"
+        if docker_volume_exists(volume):
+            log(f"Removing stale Wazuh volume {volume}.")
+            run(["docker", "volume", "rm", volume], check=False)
+    log(f"Starting fresh Wazuh for {name}.")
+    run(compose_base(index) + ["up", "-d", "wazuh"], check=False)
+
+
+def docker_free_gb() -> float | None:
+    result = run(["colima", "ssh", "--", "df", "-k", "/var/lib/docker"], check=False, capture=True)
+    if result.returncode != 0:
+        return None
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    if len(lines) < 2:
+        return None
+    parts = re.split(r"\s+", lines[-1].strip())
+    if len(parts) < 4:
+        return None
+    try:
+        return int(parts[3]) / 1024 / 1024
+    except ValueError:
+        return None
+
+
+def ensure_docker_space(min_free_gb: int) -> None:
+    free_gb = docker_free_gb()
+    if free_gb is None:
+        log("Could not read Docker disk free space; continuing.")
+        return
+    if free_gb >= min_free_gb:
+        return
+    raise SystemExit(
+        f"Docker has only {free_gb:.1f} GB free, but this workflow needs at least "
+        f"{min_free_gb} GB free. Reset stale Wazuh data with "
+        f"`python3 scripts/manage_mac_sessions.py reset-wazuh --sessions N`, "
+        "expand Colima's disk, or start without SIEM using `--no-siem`."
+    )
+
+
 def colima_config_values() -> dict[str, int]:
     config_path = Path.home() / ".colima" / "default" / "colima.yaml"
     values: dict[str, int] = {}
@@ -676,30 +734,31 @@ def build_session_images() -> None:
         run(compose_base(1) + ["build", service])
 
 
-def start_sessions(count: int, skip_build: bool, cpu: int, memory: int) -> None:
+def start_sessions(count: int, skip_build: bool, cpu: int, memory: int, with_siem: bool, min_free_gb: int) -> None:
     ensure_colima(cpu, memory)
+    ensure_docker_space(min_free_gb)
     stop_default_stack_if_running()
     for index in range(1, count + 1):
         generate_override(index)
     if not skip_build:
         build_session_images()
     for index in range(1, count + 1):
-        run(compose_base(index) + ["up", "-d"])
+        run(compose_base(index, with_siem=with_siem) + ["up", "-d"])
     log("Waiting for healthchecks to settle...")
     time.sleep(30)
-    status_sessions(count)
+    status_sessions(count, with_siem)
     print_urls(count)
 
 
-def stop_sessions(count: int) -> None:
+def stop_sessions(count: int, with_siem: bool) -> None:
     for index in range(1, count + 1):
-        run(compose_base(index) + ["down"], check=False)
+        run(compose_base(index, with_siem=with_siem) + ["down"], check=False)
 
 
-def status_sessions(count: int) -> None:
+def status_sessions(count: int, with_siem: bool = True) -> None:
     for index in range(1, count + 1):
         print(f"\n=== {session_name(index)} ===")
-        run(compose_base(index) + ["ps"], check=False)
+        run(compose_base(index, with_siem=with_siem) + ["ps"], check=False)
 
 
 def status_sessions_for(indexes: list[int]) -> None:
@@ -742,11 +801,13 @@ def print_urls(count: int) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run isolated GRFICSv3 sessions on one Mac.")
-    parser.add_argument("action", choices=["start", "stop", "status", "config", "urls", "reset-state"])
+    parser.add_argument("action", choices=["start", "stop", "status", "config", "urls", "reset-state", "reset-wazuh"])
     parser.add_argument("--sessions", type=int, default=1, help="Number of sessions to manage.")
     parser.add_argument("--target-session", type=int, help="Single session to reset or inspect.")
     parser.add_argument("--cpu", type=int, default=8, help="Colima CPU count for multi-session use.")
     parser.add_argument("--memory", type=int, default=16, help="Colima memory in GB for multi-session use.")
+    parser.add_argument("--min-free-gb", type=int, default=15, help="Minimum Docker disk free space before start.")
+    parser.add_argument("--no-siem", action="store_true", help="Do not start or manage Wazuh/SIEM containers.")
     parser.add_argument("--skip-build", action="store_true", help="Skip rebuilding local session-aware images.")
     return parser.parse_args()
 
@@ -762,12 +823,14 @@ def main() -> int:
     if args.sessions > 2:
         log("WARNING: this Mac workflow is tuned for 2 sessions. More may be slow.")
 
+    with_siem = not args.no_siem
+
     if args.action == "start":
-        start_sessions(args.sessions, args.skip_build, args.cpu, args.memory)
+        start_sessions(args.sessions, args.skip_build, args.cpu, args.memory, with_siem, args.min_free_gb)
     elif args.action == "stop":
-        stop_sessions(args.sessions)
+        stop_sessions(args.sessions, with_siem)
     elif args.action == "status":
-        status_sessions(args.sessions)
+        status_sessions(args.sessions, with_siem)
     elif args.action == "config":
         config_sessions(args.sessions)
     elif args.action == "urls":
@@ -778,6 +841,10 @@ def main() -> int:
         if args.target_session is None:
             raise SystemExit("reset-state requires --target-session, e.g. --target-session 4")
         reset_session_state(args.target_session)
+    elif args.action == "reset-wazuh":
+        indexes = [args.target_session] if args.target_session is not None else list(range(1, args.sessions + 1))
+        for index in indexes:
+            reset_wazuh_state(index)
     return 0
 
 

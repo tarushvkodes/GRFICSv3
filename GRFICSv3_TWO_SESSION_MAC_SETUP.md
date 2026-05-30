@@ -49,6 +49,20 @@ Later starts can skip rebuilds:
 python3 scripts/manage_mac_sessions.py start --sessions 2 --skip-build
 ```
 
+Wazuh/SIEM is resource heavy. If you only need the game, Kali, HMI, PLC, EWS, and Caldera, start without Wazuh:
+
+```bash
+python3 scripts/manage_mac_sessions.py start --sessions 2 --skip-build --no-siem
+```
+
+The manager checks Docker disk space before starting. If Wazuh gets stuck after a full-disk event, reset only the Wazuh state:
+
+```bash
+python3 scripts/manage_mac_sessions.py reset-wazuh --sessions 2
+```
+
+That preserves the SCADA, PLC, router, Kali, EWS, Caldera, and simulation session volumes, but it wipes Wazuh history.
+
 ## URL Layout
 
 Session 1 keeps the normal ports:

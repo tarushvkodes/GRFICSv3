@@ -258,7 +258,9 @@ if [ -d "/docker_persistent" ]; then
     cp -vnr /workdir/webserver/st_files_default/* /docker_persistent/st_files/ || true
 fi
 cd "$OPENPLC_DIR/webserver"
-route add -net 192.168.90.0/24 gw 192.168.95.200
+DMZ_SUBNET="\${DMZ_SUBNET:-192.168.90.0/24}"
+ROUTER_ICS_IP="\${ROUTER_ICS_IP:-192.168.95.200}"
+route add -net "\$DMZ_SUBNET" gw "\$ROUTER_ICS_IP" || true
 "$OPENPLC_DIR/.venv/bin/python3" webserver.py
 EOF
     chmod a+x "$OPENPLC_DIR/start_openplc.sh"

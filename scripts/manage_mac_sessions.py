@@ -181,11 +181,35 @@ def write_plc_mbconfig(index: int, values: dict[str, str]) -> Path:
     return config_path
 
 
+def write_plc_start_script(index: int, values: dict[str, str]) -> Path:
+    session_path = SESSION_DIR / session_name(index) / "plc"
+    session_path.mkdir(parents=True, exist_ok=True)
+    script_path = session_path / "start_openplc.sh"
+    script_path.write_text(
+        f"""#!/bin/bash
+if [ -d "/docker_persistent" ]; then
+    mkdir -p /docker_persistent/st_files
+    cp -vn /workdir/webserver/dnp3_default.cfg /docker_persistent/dnp3.cfg
+    cp -vn /workdir/webserver/openplc_default.db /docker_persistent/openplc.db
+    cp -vn /workdir/webserver/active_program_default /docker_persistent/active_program
+    cp -vn /workdir/webserver/mbconfig_default.cfg /docker_persistent/mbconfig.cfg
+    cp -vnr /workdir/webserver/st_files_default/* /docker_persistent/st_files/ || true
+fi
+cd /workdir/webserver
+route add -net {values['dmz_subnet']} gw {values['router_ics']} || true
+/workdir/.venv/bin/python3 webserver.py
+"""
+    )
+    script_path.chmod(0o755)
+    return script_path
+
+
 def generate_override(index: int) -> Path:
     name = session_name(index)
     values = network_values(index)
     fact_path = write_caldera_fact(index, values)
     mbconfig_path = write_plc_mbconfig(index, values)
+    plc_start_path = write_plc_start_script(index, values)
     session_path = SESSION_DIR / name
     session_path.mkdir(parents=True, exist_ok=True)
     compose_path = session_path / "docker-compose.yml"
@@ -248,6 +272,7 @@ def generate_override(index: int) -> Path:
     volumes:
       - plc_volume:/docker_persistent
       - {mbconfig_path}:/docker_persistent/mbconfig.cfg
+      - {plc_start_path}:/workdir/start_openplc.sh:ro
 
   ews:
     container_name: {name}_EWS
